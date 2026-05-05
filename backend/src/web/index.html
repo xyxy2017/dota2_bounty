@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dota2 Bounty Console</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="shell">
+      <header class="hero">
+        <div>
+          <p class="eyebrow">Local Control Panel</p>
+          <h1>Dota2 Bounty Console</h1>
+          <p class="subtitle">
+            看当前提醒、重复匹配玩家和最近历史，并直接维护标签与备注。
+          </p>
+        </div>
+        <div class="hero-actions">
+          <button id="refresh-all" class="button primary">刷新数据</button>
+          <a class="button ghost" href="/alerts/current" target="_blank" rel="noreferrer">查看 Alerts JSON</a>
+        </div>
+      </header>
+
+      <main class="grid">
+        <section class="panel alert-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">当前提醒</p>
+              <h2>本局命中</h2>
+            </div>
+            <span id="alert-updated-at" class="meta"></span>
+          </div>
+          <div id="alert-headline" class="headline empty">暂无提醒</div>
+          <div id="alert-list" class="stack"></div>
+        </section>
+
+        <section class="panel summary-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">服务概览</p>
+              <h2>后端状态</h2>
+            </div>
+          </div>
+          <div id="summary-cards" class="stats"></div>
+        </section>
+
+        <section class="panel repeats-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">重复匹配</p>
+              <h2>高频玩家</h2>
+            </div>
+            <span class="meta">按提醒优先级与交手次数查看</span>
+          </div>
+          <div id="repeats-list" class="stack"></div>
+        </section>
+
+        <section class="panel recent-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">最近玩家</p>
+              <h2>标签管理</h2>
+            </div>
+            <span class="meta">点击玩家可编辑</span>
+          </div>
+          <div id="players-list" class="stack"></div>
+        </section>
+
+        <section class="panel detail-panel">
+          <div class="panel-head">
+            <div>
+              <p class="panel-label">玩家详情</p>
+              <h2 id="detail-title">选择一名玩家</h2>
+            </div>
+            <span id="detail-meta" class="meta"></span>
+          </div>
+
+          <form id="player-form" class="editor">
+            <label>
+              <span>标签</span>
+              <select id="tag-select">
+                <option value="">未设置</option>
+              </select>
+            </label>
+            <label>
+              <span>自定义备注</span>
+              <textarea id="note-input" rows="4" placeholder="例如：这人喜欢打中路，容易上头"></textarea>
+            </label>
+            <div class="editor-actions">
+              <button type="submit" class="button primary">保存标签</button>
+              <button type="button" id="reload-detail" class="button ghost">重新加载详情</button>
+            </div>
+          </form>
+
+          <div id="detail-summary" class="detail-summary empty">暂无玩家详情</div>
+          <div id="detail-history" class="stack"></div>
+        </section>
+      </main>
+    </div>
+
+    <template id="alert-item-template">
+      <article class="card alert-card">
+        <div class="card-top">
+          <div>
+            <h3 class="card-title"></h3>
+            <p class="card-summary"></p>
+          </div>
+          <span class="badge"></span>
+        </div>
+      </article>
+    </template>
+
+    <template id="repeat-item-template">
+      <article class="card clickable">
+        <div class="card-top">
+          <div>
+            <h3 class="card-title"></h3>
+            <p class="card-summary"></p>
+          </div>
+          <span class="badge"></span>
+        </div>
+      </article>
+    </template>
+
+    <template id="player-item-template">
+      <article class="card clickable">
+        <div class="card-top">
+          <div>
+            <h3 class="card-title"></h3>
+            <p class="card-summary"></p>
+          </div>
+          <span class="badge muted"></span>
+        </div>
+      </article>
+    </template>
+
+    <script src="/app.js"></script>
+  </body>
+</html>
