@@ -17,9 +17,7 @@
         --bad: #ff7b7b;
       }
 
-      * {
-        box-sizing: border-box;
-      }
+      * { box-sizing: border-box; }
 
       body {
         margin: 0;
@@ -42,6 +40,8 @@
         font-size: clamp(28px, 4vw, 48px);
         letter-spacing: -0.04em;
       }
+
+      h2, h3 { margin: 14px 0 8px; }
 
       p {
         margin: 8px 0 0;
@@ -72,9 +72,7 @@
         margin-top: 14px;
       }
 
-      button,
-      select,
-      input {
+      button, select, input {
         border: 1px solid var(--line);
         border-radius: 999px;
         background: #0e1b31;
@@ -117,8 +115,7 @@
         gap: 12px;
       }
 
-      video,
-      canvas {
+      video, canvas {
         width: 100%;
         max-height: 470px;
         border: 1px solid var(--line);
@@ -163,8 +160,7 @@
         margin-top: 10px;
       }
 
-      th,
-      td {
+      th, td {
         border-bottom: 1px solid var(--line);
         padding: 9px 7px;
         text-align: left;
@@ -181,13 +177,14 @@
         font-family: Consolas, monospace;
       }
 
-      .good {
-        color: var(--accent);
+      .hint {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.55;
       }
 
-      .bad {
-        color: var(--bad);
-      }
+      .good { color: var(--accent); }
+      .bad { color: var(--bad); }
 
       pre {
         max-height: 240px;
@@ -200,9 +197,7 @@
       }
 
       @media (max-width: 960px) {
-        .grid {
-          grid-template-columns: 1fr;
-        }
+        .grid { grid-template-columns: 1fr; }
       }
     </style>
   </head>
@@ -211,7 +206,7 @@
       <h1>选人阶段自动 OCR</h1>
       <p>
         点一次“选择 Dota 窗口”，授权后页面会按间隔自动截取画面、OCR 玩家昵称，并匹配历史玩家。
-        建议在选人/计分板可见时使用；如果误识别多，调小裁剪区域。
+        现在优先识别英雄头像栏向下固定一行的玩家名区域，减少噪声并降低性能消耗。
       </p>
 
       <div class="toolbar">
@@ -225,7 +220,7 @@
       <div class="grid">
         <section class="card stage">
           <div class="toolbar">
-            <span class="pill">interval <input id="intervalSec" type="number" min="3" max="60" step="1" value="8" style="width: 70px" />s</span>
+            <span class="pill">interval <input id="intervalSec" type="number" min="3" max="60" step="1" value="6" style="width: 70px" />s</span>
             <span class="pill">threshold <input id="threshold" type="number" min="0.1" max="1" step="0.01" value="0.72" style="width: 74px" /></span>
             <span class="pill">lang
               <select id="ocrLang">
@@ -233,6 +228,19 @@
                 <option value="eng">eng</option>
               </select>
             </span>
+            <span class="pill">preprocess
+              <select id="preprocessMode">
+                <option value="balanced" selected>balanced</option>
+                <option value="sharp">sharp</option>
+                <option value="binary">binary</option>
+                <option value="none">none</option>
+              </select>
+            </span>
+            <label class="pill"><input id="skipSameFrame" type="checkbox" checked /> skip same frame</label>
+            <label class="pill"><input id="publishAlerts" type="checkbox" checked /> publish alerts</label>
+            <span class="pill">confirm <input id="confirmHitScans" type="number" min="1" max="5" step="1" value="1" style="width: 56px" /> scans</span>
+            <button id="presetDraftTop">选人顶部昵称栏</button>
+            <button id="presetDraftBottom">选人底部昵称栏</button>
             <button id="presetFull">全画面</button>
             <button id="presetCenter">中间区域</button>
             <button id="presetLeft">左半边</button>
@@ -241,12 +249,15 @@
 
           <video id="video" autoplay muted playsinline></video>
           <canvas id="cropCanvas"></canvas>
+          <div class="hint">
+            上方画布是实际送入 OCR 的裁剪和增强结果。选人阶段优先试“选人顶部昵称栏”；如果你的 Dota UI 玩家名在底部头像栏下方，再切“选人底部昵称栏”。只截固定一行会比全屏 OCR 快很多。
+          </div>
 
           <div class="crop-grid">
-            <label class="range">x% <input id="cropX" type="range" min="0" max="95" value="0" /></label>
-            <label class="range">y% <input id="cropY" type="range" min="0" max="95" value="0" /></label>
-            <label class="range">w% <input id="cropW" type="range" min="5" max="100" value="100" /></label>
-            <label class="range">h% <input id="cropH" type="range" min="5" max="100" value="100" /></label>
+            <label class="range">x% <input id="cropX" type="range" min="0" max="95" value="4" /></label>
+            <label class="range">y% <input id="cropY" type="range" min="0" max="95" value="10" /></label>
+            <label class="range">w% <input id="cropW" type="range" min="5" max="100" value="92" /></label>
+            <label class="range">h% <input id="cropH" type="range" min="5" max="100" value="15" /></label>
           </div>
         </section>
 
@@ -289,6 +300,10 @@
       const threshold = document.getElementById("threshold");
       const intervalSec = document.getElementById("intervalSec");
       const ocrLang = document.getElementById("ocrLang");
+      const preprocessMode = document.getElementById("preprocessMode");
+      const skipSameFrame = document.getElementById("skipSameFrame");
+      const publishAlerts = document.getElementById("publishAlerts");
+      const confirmHitScans = document.getElementById("confirmHitScans");
       const cropX = document.getElementById("cropX");
       const cropY = document.getElementById("cropY");
       const cropW = document.getElementById("cropW");
@@ -299,6 +314,11 @@
       let busy = false;
       let lastRunAt = null;
       let frozenOnHit = false;
+      let lastFrameFingerprint = null;
+      let stableHitKey = null;
+      let stableHitCount = 0;
+
+      let hasStoredSettings = loadSettings();
 
       startCapture.addEventListener("click", async () => {
         try {
@@ -312,7 +332,11 @@
           runOnce.disabled = false;
           statusEl.textContent = "已选择窗口，可以开始自动识别";
           stream.getVideoTracks()[0].addEventListener("ended", stopAll);
-          drawPreview();
+          if (hasStoredSettings) {
+            drawPreview();
+          } else {
+            setCrop(4, 10, 92, 15);
+          }
         } catch (err) {
           statusEl.textContent = `授权失败: ${err.message || err}`;
         }
@@ -324,9 +348,12 @@
         stopLoop.disabled = false;
         runOnce.disabled = true;
         frozenOnHit = false;
+        lastFrameFingerprint = null;
+        stableHitKey = null;
+        stableHitCount = 0;
         statusEl.textContent = "自动识别已启动";
         runOcrOnce();
-        timer = window.setInterval(runOcrOnce, Math.max(3, Number(intervalSec.value || 8)) * 1000);
+        timer = window.setInterval(runOcrOnce, Math.max(3, Number(intervalSec.value || 6)) * 1000);
       });
 
       stopLoop.addEventListener("click", () => {
@@ -341,11 +368,27 @@
 
       runOnce.addEventListener("click", runOcrOnce);
 
+      document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(4, 10, 92, 15));
+      document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(4, 72, 92, 16));
       document.getElementById("presetFull").addEventListener("click", () => setCrop(0, 0, 100, 100));
       document.getElementById("presetCenter").addEventListener("click", () => setCrop(18, 8, 64, 84));
       document.getElementById("presetLeft").addEventListener("click", () => setCrop(0, 8, 50, 84));
       document.getElementById("presetRight").addEventListener("click", () => setCrop(50, 8, 50, 84));
       [cropX, cropY, cropW, cropH].forEach((input) => input.addEventListener("input", drawPreview));
+      preprocessMode.addEventListener("change", drawPreview);
+      [
+        cropX,
+        cropY,
+        cropW,
+        cropH,
+        intervalSec,
+        threshold,
+        ocrLang,
+        preprocessMode,
+        skipSameFrame,
+        publishAlerts,
+        confirmHitScans,
+      ].forEach((input) => input.addEventListener("change", saveSettings));
 
       async function runOcrOnce() {
         if (!stream || busy || frozenOnHit) return;
@@ -357,6 +400,16 @@
         lastRunAt = new Date();
         try {
           drawPreview();
+          const fingerprint = computeFrameFingerprint();
+          if (timer && skipSameFrame.checked && lastFrameFingerprint) {
+            const delta = frameDelta(fingerprint, lastFrameFingerprint);
+            if (delta < 2.2) {
+              statusEl.textContent = `画面变化很小，跳过本轮 OCR delta=${delta.toFixed(1)}`;
+              return;
+            }
+          }
+          lastFrameFingerprint = fingerprint;
+
           statusEl.textContent = `OCR 中 ${lastRunAt.toLocaleTimeString("zh-CN", { hour12: false })}`;
           const result = await Tesseract.recognize(canvas, ocrLang.value || "eng+chi_sim", {
             logger: (m) => {
@@ -377,9 +430,11 @@
       function drawPreview() {
         if (!video.videoWidth || !video.videoHeight) return;
         const source = getCropRect();
-        canvas.width = Math.max(1, source.sw);
-        canvas.height = Math.max(1, source.sh);
+        const scale = preprocessScale(preprocessMode.value);
+        canvas.width = Math.max(1, Math.min(1800, Math.floor(source.sw * scale)));
+        canvas.height = Math.max(1, Math.min(520, Math.floor(source.sh * scale)));
         ctx.drawImage(video, source.sx, source.sy, source.sw, source.sh, 0, 0, canvas.width, canvas.height);
+        preprocessCanvas(preprocessMode.value);
       }
 
       function getCropRect() {
@@ -401,7 +456,61 @@
         cropY.value = y;
         cropW.value = w;
         cropH.value = h;
+        lastFrameFingerprint = null;
         drawPreview();
+        saveSettings();
+      }
+
+      function preprocessScale(mode) {
+        if (mode === "none") return 1;
+        if (mode === "sharp" || mode === "binary") return 3;
+        return 2.4;
+      }
+
+      function preprocessCanvas(mode) {
+        if (mode === "none" || !canvas.width || !canvas.height) return;
+        const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const data = image.data;
+        const contrast = mode === "sharp" || mode === "binary" ? 2.15 : 1.65;
+        const brightness = mode === "binary" ? 12 : 8;
+        for (let i = 0; i < data.length; i += 4) {
+          const gray = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+          let value = (gray - 128) * contrast + 128 + brightness;
+          if (mode === "binary") {
+            value = value > 148 ? 255 : 0;
+          }
+          value = Math.max(0, Math.min(255, value));
+          data[i] = value;
+          data[i + 1] = value;
+          data[i + 2] = value;
+        }
+        ctx.putImageData(image, 0, 0);
+      }
+
+      function computeFrameFingerprint() {
+        if (!canvas.width || !canvas.height) return [];
+        const sampleWidth = 24;
+        const sampleHeight = 8;
+        const stepX = Math.max(1, Math.floor(canvas.width / sampleWidth));
+        const stepY = Math.max(1, Math.floor(canvas.height / sampleHeight));
+        const image = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+        const values = [];
+        for (let y = 0; y < canvas.height; y += stepY) {
+          for (let x = 0; x < canvas.width; x += stepX) {
+            values.push(image[(y * canvas.width + x) * 4]);
+          }
+        }
+        return values;
+      }
+
+      function frameDelta(left, right) {
+        const length = Math.min(left.length, right.length);
+        if (!length) return Number.POSITIVE_INFINITY;
+        let total = 0;
+        for (let i = 0; i < length; i += 1) {
+          total += Math.abs(left[i] - right[i]);
+        }
+        return total / length;
       }
 
       async function matchText(text, options = {}) {
@@ -424,10 +533,52 @@
         const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
         const matchCount = Number(data.match_count || 0);
         if (options.stopOnHit && matchCount > 0) {
+          const hitKey = buildHitKey(data);
+          if (hitKey === stableHitKey) {
+            stableHitCount += 1;
+          } else {
+            stableHitKey = hitKey;
+            stableHitCount = 1;
+          }
+          const requiredScans = Math.max(1, Math.min(5, Number(confirmHitScans.value || 1)));
+          if (stableHitCount < requiredScans) {
+            statusEl.textContent = `疑似命中 ${matchCount} 个，等待连续确认 ${stableHitCount}/${requiredScans}`;
+            return;
+          }
+          if (publishAlerts.checked) {
+            await publishOcrAlerts(cleaned);
+          }
           freezeOnHit(matchCount, time);
           return;
         }
+        if (matchCount === 0) {
+          stableHitKey = null;
+          stableHitCount = 0;
+        }
         statusEl.textContent = `完成 ${time}: 命中 ${matchCount}`;
+      }
+
+      async function publishOcrAlerts(text) {
+        const res = await fetch("/ocr/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            raw_text: text,
+            threshold: Number(threshold.value || 0.72),
+            publish_alerts: true,
+          }),
+        });
+        const data = await res.json();
+        renderResult(data);
+      }
+
+      function buildHitKey(data) {
+        return (data.matches || [])
+          .slice(0, 5)
+          .map((item) => item.matched_player_id)
+          .filter(Boolean)
+          .sort()
+          .join("|");
       }
 
       function freezeOnHit(matchCount, time) {
@@ -461,6 +612,9 @@
         if (timer) window.clearInterval(timer);
         timer = null;
         frozenOnHit = false;
+        lastFrameFingerprint = null;
+        stableHitKey = null;
+        stableHitCount = 0;
         if (stream) {
           stream.getTracks().forEach((track) => track.stop());
         }
@@ -478,6 +632,47 @@
           .replaceAll(">", "&gt;")
           .replaceAll('"', "&quot;")
           .replaceAll("'", "&#039;");
+      }
+
+      function saveSettings() {
+        const settings = {
+          cropX: cropX.value,
+          cropY: cropY.value,
+          cropW: cropW.value,
+          cropH: cropH.value,
+          intervalSec: intervalSec.value,
+          threshold: threshold.value,
+          ocrLang: ocrLang.value,
+          preprocessMode: preprocessMode.value,
+          skipSameFrame: skipSameFrame.checked,
+          publishAlerts: publishAlerts.checked,
+          confirmHitScans: confirmHitScans.value,
+        };
+        localStorage.setItem("dota2-bounty-ocr-live-settings", JSON.stringify(settings));
+        hasStoredSettings = true;
+      }
+
+      function loadSettings() {
+        try {
+          const raw = localStorage.getItem("dota2-bounty-ocr-live-settings");
+          if (!raw) return false;
+          const settings = JSON.parse(raw);
+          cropX.value = settings.cropX ?? cropX.value;
+          cropY.value = settings.cropY ?? cropY.value;
+          cropW.value = settings.cropW ?? cropW.value;
+          cropH.value = settings.cropH ?? cropH.value;
+          intervalSec.value = settings.intervalSec ?? intervalSec.value;
+          threshold.value = settings.threshold ?? threshold.value;
+          ocrLang.value = settings.ocrLang ?? ocrLang.value;
+          preprocessMode.value = settings.preprocessMode ?? preprocessMode.value;
+          skipSameFrame.checked = settings.skipSameFrame ?? skipSameFrame.checked;
+          publishAlerts.checked = settings.publishAlerts ?? publishAlerts.checked;
+          confirmHitScans.value = settings.confirmHitScans ?? confirmHitScans.value;
+          return true;
+        } catch {
+          localStorage.removeItem("dota2-bounty-ocr-live-settings");
+          return false;
+        }
       }
     </script>
   </body>

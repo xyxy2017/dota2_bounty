@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import threading
+from datetime import datetime, timezone
 
 from config.settings import Settings
 from domain.models import MatchResolveContext, PlayerMetaUpdate
@@ -205,9 +206,14 @@ class Supervisor:
                         "match_count": result["match_count"],
                         "extracted_line_count": len(result["extracted_lines"]),
                         "threshold": threshold,
+                        "published_alerts": bool(data.get("publish_alerts") and result.get("matches")),
                     },
                 )
                 self.runtime_status.merge({"last_ocr_match": result})
+                if data.get("publish_alerts") and result.get("matches"):
+                    alerts_payload = _build_ocr_alerts_payload(result)
+                    self.alerts_writer.write(alerts_payload)
+                    self.events_repo.append_event("ocr_alerts_published", alerts_payload)
                 return 200, result
 
             if method == "GET" and path == "/summary":
@@ -384,3 +390,58 @@ def _pick_account_id(candidate: str | int | None, fallback: str | None) -> str:
     if value in (None, ""):
         raise HttpError(400, "account_id is required")
     return str(value)
+
+
+def _build_ocr_alerts_payload(match_result: dict) -> dict:
+    matches = match_result.get("matches") or []
+    items = []
+    for item in matches[:3]:
+        player = item.get("player") or {}
+        name = item.get("matched_name") or player.get("latest_name") or item.get("matched_player_id")
+        confidence = item.get("confidence")
+        encounter_count = int(player.get("encounter_count") or 0)
+        tag = player.get("tag")
+        note = player.get("note")
+        summary_parts = [
+            f"OCR 疑似命中，置信度 {confidence}",
+            f"历史记录 {encounter_count} 次",
+            "盘中 OCR 只能按昵称弱匹配，赛后仍以真实 ID 补全为准",
+        ]
+        if note:
+            summary_parts.append(f"备注：{note}")
+        items.append(
+            {
+                "player_id": item.get("matched_player_id"),
+                "player_name": name,
+                "tag": tag,
+                "note": note,
+                "priority_score": int(round(float(confidence or 0) * 100)) + encounter_count,
+                "summary_text": "；".join(summary_parts),
+                "last_match_id": None,
+                "last_result": None,
+                "last_relation": None,
+                "last_player_hero_name": None,
+                "last_my_hero_name": None,
+                "last_player_hero_name_zh": None,
+                "last_my_hero_name_zh": None,
+                "last_player_hero_name_en": None,
+                "last_my_hero_name_en": None,
+                "last_player_hero_id": None,
+                "last_my_hero_id": None,
+                "encounter_count": encounter_count,
+                "match_method": item.get("match_method"),
+                "confidence": confidence,
+                "confirmed_id": False,
+                "source": "ocr",
+            }
+        )
+    top_name = items[0]["player_name"] if items else None
+    headline = f"OCR 疑似命中: {top_name}" if top_name else None
+    return {
+        "temp_match_key": "ocr-live",
+        "hit_count": len(matches),
+        "headline": headline,
+        "items": items,
+        "source": "ocr",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
