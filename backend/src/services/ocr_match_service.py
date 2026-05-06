@@ -30,36 +30,38 @@ class OcrMatchService:
             ]
         matches: list[dict[str, Any]] = []
         unmatched_lines: list[str] = []
-        used_player_ids: set[str] = set()
+        used_player_keys: set[str] = set()
 
         for line in extracted_lines:
-            best = _best_match_for_line(line, candidates)
-            if not best or best["confidence"] < threshold:
+            line_matches = _matches_for_line(line, candidates, threshold=threshold)
+            if not line_matches:
                 unmatched_lines.append(line)
                 continue
-            player_id = str(best["player"]["player_id"])
-            duplicate = player_id in used_player_ids
-            used_player_ids.add(player_id)
-            matches.append(
-                {
-                    "ocr_line": line,
-                    "matched_player_id": player_id,
-                    "matched_name": best["matched_name"],
-                    "latest_name": best["player"].get("latest_name"),
-                    "confidence": best["confidence"],
-                    "match_method": best["method"],
-                    "confirmed_id": False,
-                    "duplicate_player_match": duplicate,
-                    "player": {
-                        "player_id": player_id,
+            for best in line_matches:
+                player_id = _canonical_dota_player_id(best["player"]["player_id"])
+                player_key = _canonical_dota_player_id(player_id)
+                duplicate = player_key in used_player_keys
+                used_player_keys.add(player_key)
+                matches.append(
+                    {
+                        "ocr_line": line,
+                        "matched_player_id": player_id,
+                        "matched_name": best["matched_name"],
                         "latest_name": best["player"].get("latest_name"),
-                        "tag": best["player"].get("tag"),
-                        "note": best["player"].get("note"),
-                        "encounter_count": int(best["player"].get("encounter_count") or 0),
-                        "last_seen_at": best["player"].get("last_seen_at"),
-                    },
-                }
-            )
+                        "confidence": best["confidence"],
+                        "match_method": best["method"],
+                        "confirmed_id": False,
+                        "duplicate_player_match": duplicate,
+                        "player": {
+                            "player_id": player_id,
+                            "latest_name": best["player"].get("latest_name"),
+                            "tag": best["player"].get("tag"),
+                            "note": best["player"].get("note"),
+                            "encounter_count": int(best["player"].get("encounter_count") or 0),
+                            "last_seen_at": best["player"].get("last_seen_at"),
+                        },
+                    }
+                )
 
         matches.sort(key=lambda item: (item["confidence"], item["player"]["encounter_count"]), reverse=True)
         return {
@@ -96,19 +98,44 @@ def _extract_lines(*, raw_text: str | None, lines: list[str] | None) -> list[str
     return result[:80]
 
 
-def _best_match_for_line(line: str, candidates: list[dict]) -> dict[str, Any] | None:
-    best: dict[str, Any] | None = None
+def _matches_for_line(line: str, candidates: list[dict], *, threshold: float) -> list[dict[str, Any]]:
+    per_player: dict[str, dict[str, Any]] = {}
     for candidate in candidates:
         for alias in _aliases_for_candidate(candidate):
             confidence, method = _score(line, alias)
-            if best is None or confidence > best["confidence"]:
-                best = {
+            if confidence < threshold:
+                continue
+            player_key = _canonical_dota_player_id(candidate.get("player_id"))
+            current = per_player.get(player_key)
+            if current is None or (confidence, int(candidate.get("encounter_count") or 0)) > (
+                current["confidence"],
+                int(current["player"].get("encounter_count") or 0),
+            ):
+                per_player[player_key] = {
                     "player": candidate,
                     "matched_name": alias,
                     "confidence": round(confidence, 3),
                     "method": method,
                 }
-    return best
+
+    strong_methods = {"exact_name", "alias_in_ocr_line"}
+    strong_matches = [
+        item for item in per_player.values() if item["method"] in strong_methods
+    ]
+    if strong_matches:
+        return sorted(
+            strong_matches,
+            key=lambda item: (item["confidence"], int(item["player"].get("encounter_count") or 0)),
+            reverse=True,
+        )[:10]
+
+    if not per_player:
+        return []
+    best = max(
+        per_player.values(),
+        key=lambda item: (item["confidence"], int(item["player"].get("encounter_count") or 0)),
+    )
+    return [best]
 
 
 def _aliases_for_candidate(candidate: dict) -> list[str]:
@@ -195,3 +222,17 @@ def _equivalent_dota_ids(value: Any) -> set[str]:
     else:
         ids.add(str(numeric + steam64_base))
     return ids
+
+
+def _canonical_dota_player_id(value: Any) -> str:
+    if value in (None, ""):
+        return ""
+    text = str(value)
+    try:
+        numeric = int(text)
+    except ValueError:
+        return text
+    steam64_base = 76561197960265728
+    if numeric > steam64_base:
+        return str(numeric - steam64_base)
+    return text

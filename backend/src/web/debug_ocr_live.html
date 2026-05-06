@@ -280,6 +280,12 @@
           </table>
           <h3>Raw JSON</h3>
           <pre id="rawJson">{}</pre>
+          <div class="toolbar">
+            <button id="refreshDebug">刷新 OCR 诊断</button>
+            <a class="pill" href="/" target="_blank" rel="noreferrer">打开主页提醒</a>
+            <a class="pill" href="/debug/ocr/status" target="_blank" rel="noreferrer">打开诊断 JSON</a>
+          </div>
+          <pre id="debugStatus">{}</pre>
         </section>
       </div>
     </main>
@@ -297,6 +303,8 @@
       const matchesEl = document.getElementById("matches");
       const summaryEl = document.getElementById("summary");
       const rawJson = document.getElementById("rawJson");
+      const debugStatus = document.getElementById("debugStatus");
+      const refreshDebug = document.getElementById("refreshDebug");
       const threshold = document.getElementById("threshold");
       const intervalSec = document.getElementById("intervalSec");
       const ocrLang = document.getElementById("ocrLang");
@@ -319,6 +327,7 @@
       let stableHitCount = 0;
 
       let hasStoredSettings = loadSettings();
+      refreshDebugStatus();
 
       startCapture.addEventListener("click", async () => {
         try {
@@ -367,6 +376,7 @@
       });
 
       runOnce.addEventListener("click", runOcrOnce);
+      refreshDebug.addEventListener("click", refreshDebugStatus);
 
       document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(4, 10, 92, 15));
       document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(4, 72, 92, 16));
@@ -549,6 +559,7 @@
             await publishOcrAlerts(cleaned);
           }
           freezeOnHit(matchCount, time);
+          await refreshDebugStatus();
           return;
         }
         if (matchCount === 0) {
@@ -606,6 +617,16 @@
           matchesEl.appendChild(tr);
         }
         rawJson.textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function refreshDebugStatus() {
+        try {
+          const res = await fetch("/debug/ocr/status");
+          const data = await res.json();
+          debugStatus.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          debugStatus.textContent = `刷新失败: ${err.message || err}`;
+        }
       }
 
       function stopAll() {

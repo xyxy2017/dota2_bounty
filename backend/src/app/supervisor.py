@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import threading
 from datetime import datetime, timezone
 
@@ -162,6 +163,20 @@ class Supervisor:
                 self.logger.exception("resolve_worker_failed")
             self._worker_stop.wait(30)
 
+    def _build_ocr_debug_status(self) -> dict:
+        recent_events = self.events_repo.list_recent_events(limit=20)
+        ocr_events = [
+            _decode_event_payload(event)
+            for event in recent_events
+            if str(event.get("event_type") or "").startswith("ocr_")
+        ][:10]
+        return {
+            "current_alert": self.alerts_writer.read(),
+            "last_ocr_match": self.runtime_status.read().get("last_ocr_match"),
+            "recent_ocr_events": ocr_events,
+            "note": "OCR live alerts are nickname-based weak matches. Use post-match backfill for confirmed account_id.",
+        }
+
     def handle_request(
         self,
         method: str,
@@ -187,6 +202,9 @@ class Supervisor:
                     "last_payload_keys": status.get("last_payload_keys", []),
                     "updated_at": status.get("updated_at"),
                 }
+
+            if method == "GET" and path == "/debug/ocr/status":
+                return 200, self._build_ocr_debug_status()
 
             if method == "GET" and path == "/alerts/current":
                 return 200, self.alerts_writer.read()
@@ -445,3 +463,16 @@ def _build_ocr_alerts_payload(match_result: dict) -> dict:
         "source": "ocr",
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }
+
+
+def _decode_event_payload(event: dict) -> dict:
+    decoded = dict(event)
+    raw_payload = decoded.pop("payload_json", None)
+    if raw_payload:
+        try:
+            decoded["payload"] = json.loads(raw_payload)
+        except json.JSONDecodeError:
+            decoded["payload"] = raw_payload
+    else:
+        decoded["payload"] = {}
+    return decoded
