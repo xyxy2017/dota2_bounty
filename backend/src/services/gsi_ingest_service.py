@@ -21,6 +21,7 @@ class GsiIngestService:
         job_service: JobService,
         runtime_status: RuntimeStatusWriter,
         alerts_writer: RuntimeStatusWriter,
+        exclude_player_id: str | None = None,
     ) -> None:
         self.events_repo = events_repo
         self.session_tracker = session_tracker
@@ -29,12 +30,14 @@ class GsiIngestService:
         self.job_service = job_service
         self.runtime_status = runtime_status
         self.alerts_writer = alerts_writer
+        self.exclude_player_id = str(exclude_player_id) if exclude_player_id else None
 
     def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_id = self.events_repo.append_event("raw_gsi_event", payload)
         session = self.session_tracker.update(payload)
         roster = self.roster_collector.collect(payload, session)
         hits = self.history_matcher.find_hits(roster)
+        hits = [hit for hit in hits if hit.player_id != self.exclude_player_id]
 
         for player in roster.players:
             if player.player_id:
@@ -56,6 +59,17 @@ class GsiIngestService:
             "resolve_job_id": job_id,
             "roster_size": len(roster.players),
             "roster_completeness": roster.completeness,
+            "roster_players": [
+                {
+                    "player_id": player.player_id,
+                    "name": player.name,
+                    "team": player.team,
+                    "hero_id": player.hero_id,
+                    "hero_name": player.hero_name,
+                    "is_local_player": player.is_local_player,
+                }
+                for player in roster.players
+            ],
             "hit_count": len(hits),
             "hits": [hit.__dict__ for hit in hits],
             "top_hits": [hit.__dict__ for hit in hits[:3]],

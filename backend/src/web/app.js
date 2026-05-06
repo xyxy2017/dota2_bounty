@@ -58,9 +58,11 @@ function renderAlerts(data) {
 
   for (const item of data.items || []) {
     const node = document.querySelector("#alert-item-template").content.firstElementChild.cloneNode(true);
+    node.dataset.playerId = item.player_id;
     node.querySelector(".card-title").textContent = item.player_name || item.player_id;
     node.querySelector(".card-summary").textContent = item.summary_text || "暂无摘要";
     node.querySelector(".badge").textContent = item.tag || `${item.encounter_count}次`;
+    node.addEventListener("click", () => selectPlayer(item.player_id));
     list.appendChild(node);
   }
 }

@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dota2 Bounty OCR Debug</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+      :root {
+        --bg: #0b1324;
+        --panel: #101a2e;
+        --panel-2: #15233c;
+        --line: #2a3d5f;
+        --text: #e8f0ff;
+        --muted: #91a4c2;
+        --accent: #5ee6a8;
+        --warn: #ffd166;
+        --bad: #ff6b6b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at top left, rgba(94, 230, 168, 0.18), transparent 35rem),
+          linear-gradient(135deg, #07101f 0%, var(--bg) 50%, #0d1a30 100%);
+        color: var(--text);
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+
+      main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 32px 0;
+      }
+
+      h1 {
+        margin: 0 0 10px;
+        font-size: clamp(28px, 5vw, 52px);
+        letter-spacing: -0.04em;
+      }
+
+      p {
+        color: var(--muted);
+        line-height: 1.65;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+        gap: 18px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: rgba(16, 26, 46, 0.82);
+        box-shadow: 0 18px 60px rgba(0, 0, 0, 0.25);
+        padding: 18px;
+      }
+
+      .drop {
+        display: grid;
+        place-items: center;
+        min-height: 260px;
+        border: 1px dashed #52709f;
+        border-radius: 18px;
+        background: rgba(21, 35, 60, 0.72);
+        cursor: pointer;
+        text-align: center;
+        padding: 20px;
+      }
+
+      .drop:hover {
+        border-color: var(--accent);
+      }
+
+      input[type="file"] {
+        display: none;
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 180px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #081121;
+        color: var(--text);
+        padding: 14px;
+        font: 14px/1.55 Consolas, monospace;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #061021;
+        cursor: pointer;
+        font-weight: 800;
+        padding: 11px 18px;
+      }
+
+      button.secondary {
+        background: #263b61;
+        color: var(--text);
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .status {
+        color: var(--warn);
+        font-family: Consolas, monospace;
+        margin-top: 12px;
+      }
+
+      .preview {
+        max-width: 100%;
+        max-height: 420px;
+        border-radius: 16px;
+        border: 1px solid var(--line);
+        margin-top: 14px;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+        overflow: hidden;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 10px 8px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: #bcd1f2;
+        font-size: 13px;
+      }
+
+      .pill {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 4px 9px;
+        color: #b8caf0;
+        background: #0c1729;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .good {
+        color: var(--accent);
+      }
+
+      .bad {
+        color: var(--bad);
+      }
+
+      pre {
+        max-height: 300px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #07101f;
+        padding: 14px;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 860px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>OCR 玩家识别调试</h1>
+      <p>
+        上传 Dota2 计分板/选人截图，浏览器会先 OCR 出可见昵称，再把文本发给后端匹配历史玩家 ID。
+        这里得到的是“昵称弱匹配到的历史 account_id”，不是盘中官方实时 ID。
+      </p>
+
+      <div class="grid">
+        <section class="card">
+          <label class="drop" for="fileInput">
+            <div>
+              <strong>点击上传截图</strong>
+              <p>建议打开计分板后截图，尽量包含 10 个玩家昵称。图片不会上传到外网；OCR 在浏览器内执行。</p>
+            </div>
+          </label>
+          <input id="fileInput" type="file" accept="image/*" />
+          <img id="preview" class="preview" alt="" hidden />
+          <div class="actions">
+            <button id="runOcrBtn" disabled>开始 OCR</button>
+            <button id="matchBtn" class="secondary">用文本匹配</button>
+            <label class="pill">lang
+              <select id="ocrLang" style="margin-left: 8px">
+                <option value="eng+chi_sim" selected>eng+chi_sim</option>
+                <option value="eng">eng</option>
+              </select>
+            </label>
+          </div>
+          <div id="status" class="status">等待截图</div>
+        </section>
+
+        <section class="card">
+          <h2>OCR 文本</h2>
+          <textarea id="rawText" placeholder="OCR 结果会出现在这里；也可以手动粘贴玩家昵称，每行一个。"></textarea>
+          <div class="actions">
+            <label class="pill">threshold <input id="threshold" type="number" min="0.1" max="1" step="0.01" value="0.72" style="width: 72px; margin-left: 8px" /></label>
+          </div>
+        </section>
+      </div>
+
+      <section class="card" style="margin-top: 18px">
+        <h2>匹配结果</h2>
+        <div id="summary" class="pill">match_count: -</div>
+        <table>
+          <thead>
+            <tr>
+              <th>OCR 行</th>
+              <th>匹配昵称</th>
+              <th>玩家 ID</th>
+              <th>置信度</th>
+              <th>历史</th>
+              <th>说明</th>
+            </tr>
+          </thead>
+          <tbody id="matches"></tbody>
+        </table>
+        <h3>Raw JSON</h3>
+        <pre id="rawJson">{}</pre>
+      </section>
+    </main>
+
+    <script>
+      const fileInput = document.getElementById("fileInput");
+      const preview = document.getElementById("preview");
+      const runOcrBtn = document.getElementById("runOcrBtn");
+      const matchBtn = document.getElementById("matchBtn");
+      const rawText = document.getElementById("rawText");
+      const threshold = document.getElementById("threshold");
+      const ocrLang = document.getElementById("ocrLang");
+      const statusEl = document.getElementById("status");
+      const matchesEl = document.getElementById("matches");
+      const summaryEl = document.getElementById("summary");
+      const rawJson = document.getElementById("rawJson");
+
+      let imageUrl = null;
+
+      fileInput.addEventListener("change", () => {
+        const file = fileInput.files && fileInput.files[0];
+        if (!file) return;
+        if (imageUrl) URL.revokeObjectURL(imageUrl);
+        imageUrl = URL.createObjectURL(file);
+        preview.src = imageUrl;
+        preview.hidden = false;
+        runOcrBtn.disabled = false;
+        statusEl.textContent = `已选择: ${file.name}`;
+      });
+
+      runOcrBtn.addEventListener("click", async () => {
+        if (!imageUrl) return;
+        if (!window.Tesseract) {
+          statusEl.textContent = "Tesseract.js 没加载成功，请确认浏览器能访问 cdn.jsdelivr.net";
+          return;
+        }
+        runOcrBtn.disabled = true;
+        statusEl.textContent = "OCR 运行中，第一次加载模型会慢一点...";
+        try {
+          const result = await Tesseract.recognize(imageUrl, ocrLang.value || "eng+chi_sim", {
+            logger: (m) => {
+              if (m.status) {
+                const progress = m.progress ? ` ${(m.progress * 100).toFixed(0)}%` : "";
+                statusEl.textContent = `${m.status}${progress}`;
+              }
+            },
+          });
+          rawText.value = result.data.text || "";
+          statusEl.textContent = "OCR 完成，正在匹配历史玩家...";
+          await matchText();
+        } catch (err) {
+          statusEl.textContent = `OCR 失败: ${err.message || err}`;
+        } finally {
+          runOcrBtn.disabled = false;
+        }
+      });
+
+      matchBtn.addEventListener("click", matchText);
+
+      async function matchText() {
+        const text = rawText.value.trim();
+        if (!text) {
+          statusEl.textContent = "没有可匹配的文本";
+          return;
+        }
+        const res = await fetch("/ocr/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            raw_text: text,
+            threshold: Number(threshold.value || 0.72),
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          statusEl.textContent = `匹配失败: ${data.detail || res.status}`;
+          return;
+        }
+        renderResult(data);
+        statusEl.textContent = `匹配完成: ${data.match_count} 个疑似历史玩家`;
+      }
+
+      function renderResult(data) {
+        summaryEl.textContent = `match_count: ${data.match_count} / candidate_count: ${data.candidate_count}`;
+        matchesEl.innerHTML = "";
+        for (const item of data.matches || []) {
+          const tr = document.createElement("tr");
+          const confidenceClass = item.confidence >= 0.9 ? "good" : item.confidence < 0.78 ? "bad" : "";
+          tr.innerHTML = `
+            <td>${escapeHtml(item.ocr_line)}</td>
+            <td>${escapeHtml(item.matched_name || "-")}</td>
+            <td><code>${escapeHtml(item.matched_player_id || "-")}</code></td>
+            <td class="${confidenceClass}">${item.confidence}</td>
+            <td>${escapeHtml(String(item.player.encounter_count || 0))} 次<br>${escapeHtml(item.player.last_seen_at || "-")}</td>
+            <td>${escapeHtml(item.match_method)}<br>${item.confirmed_id ? "confirmed" : "OCR 弱匹配"}</td>
+          `;
+          matchesEl.appendChild(tr);
+        }
+        rawJson.textContent = JSON.stringify(data, null, 2);
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>

@@ -113,7 +113,7 @@ h1 {
 .grid {
   display: grid;
   grid-template-columns: 1.1fr 0.9fr;
-  grid-template-rows: minmax(120px, 0.25fr) minmax(200px, 0.36fr) minmax(200px, 0.39fr);
+  grid-template-rows: minmax(150px, 0.34fr) minmax(170px, 0.31fr) minmax(170px, 0.35fr);
   grid-template-areas:
     "alerts summary"
     "repeats detail"
@@ -135,6 +135,9 @@ h1 {
 
 .alert-panel {
   grid-area: alerts;
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .summary-panel {
@@ -162,6 +165,7 @@ h1 {
   grid-area: detail;
   display: grid;
   grid-template-rows: auto auto auto minmax(0, 1fr);
+  overflow: hidden;
 }
 
 .panel-head {
@@ -337,6 +341,10 @@ textarea {
 #detail-history {
   min-height: 0;
   overflow: auto;
+}
+
+.alert-card {
+  cursor: pointer;
 }
 
 @media (max-width: 960px) {

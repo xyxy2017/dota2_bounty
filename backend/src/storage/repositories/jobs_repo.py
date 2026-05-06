@@ -17,11 +17,24 @@ class JobsRepository:
         unique_key: str,
         payload: dict,
         max_attempts: int = 5,
+        reopen_done: bool = True,
     ) -> str:
         now = datetime.now(timezone.utc)
         now_str = now.isoformat()
         job_id = str(uuid4())
         with self.db.connect() as conn:
+            if not reopen_done:
+                row = conn.execute(
+                    """
+                    SELECT id, status
+                    FROM jobs
+                    WHERE job_type = ? AND unique_key = ?
+                    """,
+                    (job_type, unique_key),
+                ).fetchone()
+                if row and row["status"] == "done":
+                    return str(row["id"])
+
             conn.execute(
                 """
                 INSERT INTO jobs (

@@ -99,3 +99,37 @@ class PlayersRepository:
         with self.db.connect() as conn:
             row = conn.execute("SELECT COUNT(*) AS c FROM players").fetchone()
         return int(row["c"]) if row else 0
+
+    def list_name_match_candidates(self, limit: int = 1000) -> list[dict]:
+        safe_limit = max(1, min(5000, limit))
+        with self.db.connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT
+                    p.steam_id AS player_id,
+                    p.latest_name,
+                    p.tag,
+                    p.note,
+                    p.encounter_count,
+                    p.last_seen_at,
+                    GROUP_CONCAT(DISTINCT e.player_name) AS encounter_names
+                FROM players p
+                LEFT JOIN encounters e
+                  ON e.player_steam_id = p.steam_id
+                 AND e.player_name IS NOT NULL
+                 AND TRIM(e.player_name) != ''
+                WHERE p.latest_name IS NOT NULL
+                   OR EXISTS (
+                        SELECT 1
+                        FROM encounters e2
+                        WHERE e2.player_steam_id = p.steam_id
+                          AND e2.player_name IS NOT NULL
+                          AND TRIM(e2.player_name) != ''
+                   )
+                GROUP BY p.steam_id
+                ORDER BY p.last_seen_at DESC
+                LIMIT ?
+                """,
+                (safe_limit,),
+            ).fetchall()
+        return [dict(row) for row in rows]

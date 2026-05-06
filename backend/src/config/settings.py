@@ -20,7 +20,7 @@ class Settings:
     opendota_backfill_default_limit: int = field(
         default_factory=lambda: int(os.getenv("DOTA2_BOUNTY_OPENDOTA_BACKFILL_DEFAULT_LIMIT", "20"))
     )
-    default_account_id: str | None = field(default_factory=lambda: os.getenv("DOTA2_BOUNTY_ACCOUNT_ID"))
+    default_account_id: str | None = field(default_factory=lambda: os.getenv("DOTA2_BOUNTY_ACCOUNT_ID", "126600075"))
 
     runtime_dir: Path = field(init=False)
     ui_dir: Path = field(init=False)

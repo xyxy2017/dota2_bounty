@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Roster Live Debug</title>
+    <style>
+      :root {
+        --bg: #0f172a;
+        --panel: #111827;
+        --text: #e5e7eb;
+        --muted: #94a3b8;
+        --ok: #22c55e;
+      }
+      body {
+        margin: 0;
+        font-family: "Consolas", "Menlo", monospace;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .wrap {
+        max-width: 960px;
+        margin: 24px auto;
+        padding: 0 16px;
+      }
+      .card {
+        background: var(--panel);
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        padding: 14px;
+        margin-bottom: 12px;
+      }
+      .row {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .pill {
+        border: 1px solid #334155;
+        border-radius: 999px;
+        padding: 4px 10px;
+        color: var(--muted);
+      }
+      .ok {
+        color: var(--ok);
+      }
+      pre {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 13px;
+      }
+      th, td {
+        text-align: left;
+        padding: 8px;
+        border-bottom: 1px solid #1f2937;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="card">
+        <div class="row">
+          <div class="pill">Polling: <span class="ok">1000ms</span></div>
+          <div class="pill">Endpoint: <span>/debug/roster</span></div>
+          <div class="pill">Last Update: <span id="updated">-</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="row">
+          <div class="pill">state: <span id="state">-</span></div>
+          <div class="pill">roster_size: <span id="size">0</span></div>
+          <div class="pill">completeness: <span id="complete">-</span></div>
+          <div class="pill">temp_match_key: <span id="key">-</span></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead>
+            <tr>
+              <th>player_id</th>
+              <th>name</th>
+              <th>team</th>
+              <th>hero_id</th>
+              <th>hero_name</th>
+              <th>local</th>
+            </tr>
+          </thead>
+          <tbody id="players"></tbody>
+        </table>
+      </div>
+
+      <div class="card">
+        <pre id="raw">{}</pre>
+      </div>
+    </div>
+
+    <script>
+      const el = {
+        updated: document.getElementById("updated"),
+        state: document.getElementById("state"),
+        size: document.getElementById("size"),
+        complete: document.getElementById("complete"),
+        key: document.getElementById("key"),
+        players: document.getElementById("players"),
+        raw: document.getElementById("raw"),
+      };
+
+      function renderTable(players) {
+        el.players.innerHTML = "";
+        for (const p of players || []) {
+          const tr = document.createElement("tr");
+          tr.innerHTML = `
+            <td>${p.player_id ?? ""}</td>
+            <td>${p.name ?? ""}</td>
+            <td>${p.team ?? ""}</td>
+            <td>${p.hero_id ?? ""}</td>
+            <td>${p.hero_name ?? ""}</td>
+            <td>${p.is_local_player ? "yes" : "no"}</td>
+          `;
+          el.players.appendChild(tr);
+        }
+      }
+
+      async function tick() {
+        try {
+          const res = await fetch(`/debug/roster?t=${Date.now()}`, { cache: "no-store" });
+          const data = await res.json();
+          el.updated.textContent = new Date().toLocaleTimeString();
+          el.state.textContent = data.state ?? "-";
+          el.size.textContent = String(data.roster_size ?? 0);
+          el.complete.textContent = data.roster_completeness ?? "-";
+          el.key.textContent = data.temp_match_key ?? "-";
+          renderTable(data.roster_players || []);
+          el.raw.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          el.updated.textContent = "fetch error";
+          el.raw.textContent = String(err);
+        }
+      }
+
+      tick();
+      setInterval(tick, 1000);
+    </script>
+  </body>
+</html>

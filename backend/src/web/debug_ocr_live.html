@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Dota2 Bounty Live OCR</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+      :root {
+        --bg: #08111f;
+        --panel: rgba(13, 24, 43, 0.86);
+        --line: #29415f;
+        --text: #e8f2ff;
+        --muted: #9ab0ca;
+        --accent: #76f7b7;
+        --warn: #ffd166;
+        --bad: #ff7b7b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 12% 6%, rgba(118, 247, 183, 0.16), transparent 28rem),
+          linear-gradient(135deg, #07101d, var(--bg));
+        font-family: "Segoe UI", "Microsoft YaHei", sans-serif;
+      }
+
+      main {
+        width: min(1280px, calc(100% - 28px));
+        margin: 0 auto;
+        padding: 24px 0;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: clamp(28px, 4vw, 48px);
+        letter-spacing: -0.04em;
+      }
+
+      p {
+        margin: 8px 0 0;
+        color: var(--muted);
+        line-height: 1.6;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(360px, 0.9fr);
+        gap: 16px;
+        margin-top: 18px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        background: var(--panel);
+        box-shadow: 0 18px 54px rgba(0, 0, 0, 0.28);
+        padding: 16px;
+      }
+
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-top: 14px;
+      }
+
+      button,
+      select,
+      input {
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        background: #0e1b31;
+        color: var(--text);
+        padding: 9px 12px;
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: 800;
+      }
+
+      button.primary {
+        background: var(--accent);
+        color: #051222;
+        border-color: transparent;
+      }
+
+      button:disabled {
+        cursor: not-allowed;
+        opacity: 0.55;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: #c4d6ef;
+        background: #0d192d;
+        font-family: Consolas, monospace;
+        font-size: 12px;
+      }
+
+      .stage {
+        display: grid;
+        gap: 12px;
+      }
+
+      video,
+      canvas {
+        width: 100%;
+        max-height: 470px;
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        background: #020713;
+      }
+
+      .crop-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+
+      label.range {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      label.range input {
+        width: 100%;
+        padding: 0;
+        accent-color: var(--accent);
+      }
+
+      textarea {
+        width: 100%;
+        min-height: 170px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #07101e;
+        color: var(--text);
+        padding: 12px;
+        font: 13px/1.5 Consolas, monospace;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 10px;
+      }
+
+      th,
+      td {
+        border-bottom: 1px solid var(--line);
+        padding: 9px 7px;
+        text-align: left;
+        vertical-align: top;
+      }
+
+      th {
+        color: #b9cce6;
+        font-size: 12px;
+      }
+
+      .status {
+        color: var(--warn);
+        font-family: Consolas, monospace;
+      }
+
+      .good {
+        color: var(--accent);
+      }
+
+      .bad {
+        color: var(--bad);
+      }
+
+      pre {
+        max-height: 240px;
+        overflow: auto;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: #06101d;
+        padding: 12px;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 960px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>选人阶段自动 OCR</h1>
+      <p>
+        点一次“选择 Dota 窗口”，授权后页面会按间隔自动截取画面、OCR 玩家昵称，并匹配历史玩家。
+        建议在选人/计分板可见时使用；如果误识别多，调小裁剪区域。
+      </p>
+
+      <div class="toolbar">
+        <button id="startCapture" class="primary">选择 Dota 窗口</button>
+        <button id="startLoop" disabled>开始自动识别</button>
+        <button id="stopLoop" disabled>停止</button>
+        <button id="runOnce" disabled>识别一次</button>
+        <span id="status" class="status">等待授权</span>
+      </div>
+
+      <div class="grid">
+        <section class="card stage">
+          <div class="toolbar">
+            <span class="pill">interval <input id="intervalSec" type="number" min="3" max="60" step="1" value="8" style="width: 70px" />s</span>
+            <span class="pill">threshold <input id="threshold" type="number" min="0.1" max="1" step="0.01" value="0.72" style="width: 74px" /></span>
+            <span class="pill">lang
+              <select id="ocrLang">
+                <option value="eng+chi_sim" selected>eng+chi_sim</option>
+                <option value="eng">eng</option>
+              </select>
+            </span>
+            <button id="presetFull">全画面</button>
+            <button id="presetCenter">中间区域</button>
+            <button id="presetLeft">左半边</button>
+            <button id="presetRight">右半边</button>
+          </div>
+
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="cropCanvas"></canvas>
+
+          <div class="crop-grid">
+            <label class="range">x% <input id="cropX" type="range" min="0" max="95" value="0" /></label>
+            <label class="range">y% <input id="cropY" type="range" min="0" max="95" value="0" /></label>
+            <label class="range">w% <input id="cropW" type="range" min="5" max="100" value="100" /></label>
+            <label class="range">h% <input id="cropH" type="range" min="5" max="100" value="100" /></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>OCR 文本</h2>
+          <textarea id="rawText" placeholder="自动 OCR 文本会出现在这里"></textarea>
+
+          <h2>匹配结果</h2>
+          <div id="summary" class="pill">match_count: -</div>
+          <table>
+            <thead>
+              <tr>
+                <th>昵称</th>
+                <th>ID</th>
+                <th>置信度</th>
+                <th>历史</th>
+              </tr>
+            </thead>
+            <tbody id="matches"></tbody>
+          </table>
+          <h3>Raw JSON</h3>
+          <pre id="rawJson">{}</pre>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const startCapture = document.getElementById("startCapture");
+      const startLoop = document.getElementById("startLoop");
+      const stopLoop = document.getElementById("stopLoop");
+      const runOnce = document.getElementById("runOnce");
+      const statusEl = document.getElementById("status");
+      const video = document.getElementById("video");
+      const canvas = document.getElementById("cropCanvas");
+      const ctx = canvas.getContext("2d");
+      const rawText = document.getElementById("rawText");
+      const matchesEl = document.getElementById("matches");
+      const summaryEl = document.getElementById("summary");
+      const rawJson = document.getElementById("rawJson");
+      const threshold = document.getElementById("threshold");
+      const intervalSec = document.getElementById("intervalSec");
+      const ocrLang = document.getElementById("ocrLang");
+      const cropX = document.getElementById("cropX");
+      const cropY = document.getElementById("cropY");
+      const cropW = document.getElementById("cropW");
+      const cropH = document.getElementById("cropH");
+
+      let stream = null;
+      let timer = null;
+      let busy = false;
+      let lastRunAt = null;
+      let frozenOnHit = false;
+
+      startCapture.addEventListener("click", async () => {
+        try {
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: { frameRate: 2 },
+            audio: false,
+          });
+          video.srcObject = stream;
+          await video.play();
+          startLoop.disabled = false;
+          runOnce.disabled = false;
+          statusEl.textContent = "已选择窗口，可以开始自动识别";
+          stream.getVideoTracks()[0].addEventListener("ended", stopAll);
+          drawPreview();
+        } catch (err) {
+          statusEl.textContent = `授权失败: ${err.message || err}`;
+        }
+      });
+
+      startLoop.addEventListener("click", () => {
+        if (!stream) return;
+        startLoop.disabled = true;
+        stopLoop.disabled = false;
+        runOnce.disabled = true;
+        frozenOnHit = false;
+        statusEl.textContent = "自动识别已启动";
+        runOcrOnce();
+        timer = window.setInterval(runOcrOnce, Math.max(3, Number(intervalSec.value || 8)) * 1000);
+      });
+
+      stopLoop.addEventListener("click", () => {
+        if (timer) window.clearInterval(timer);
+        timer = null;
+        frozenOnHit = false;
+        startLoop.disabled = !stream;
+        stopLoop.disabled = true;
+        runOnce.disabled = !stream;
+        statusEl.textContent = "自动识别已停止";
+      });
+
+      runOnce.addEventListener("click", runOcrOnce);
+
+      document.getElementById("presetFull").addEventListener("click", () => setCrop(0, 0, 100, 100));
+      document.getElementById("presetCenter").addEventListener("click", () => setCrop(18, 8, 64, 84));
+      document.getElementById("presetLeft").addEventListener("click", () => setCrop(0, 8, 50, 84));
+      document.getElementById("presetRight").addEventListener("click", () => setCrop(50, 8, 50, 84));
+      [cropX, cropY, cropW, cropH].forEach((input) => input.addEventListener("input", drawPreview));
+
+      async function runOcrOnce() {
+        if (!stream || busy || frozenOnHit) return;
+        if (!window.Tesseract) {
+          statusEl.textContent = "Tesseract.js 未加载成功，请确认能访问 cdn.jsdelivr.net";
+          return;
+        }
+        busy = true;
+        lastRunAt = new Date();
+        try {
+          drawPreview();
+          statusEl.textContent = `OCR 中 ${lastRunAt.toLocaleTimeString("zh-CN", { hour12: false })}`;
+          const result = await Tesseract.recognize(canvas, ocrLang.value || "eng+chi_sim", {
+            logger: (m) => {
+              if (m.status && m.progress) {
+                statusEl.textContent = `${m.status} ${(m.progress * 100).toFixed(0)}%`;
+              }
+            },
+          });
+          rawText.value = result.data.text || "";
+          await matchText(rawText.value, { stopOnHit: Boolean(timer) });
+        } catch (err) {
+          statusEl.textContent = `识别失败: ${err.message || err}`;
+        } finally {
+          busy = false;
+        }
+      }
+
+      function drawPreview() {
+        if (!video.videoWidth || !video.videoHeight) return;
+        const source = getCropRect();
+        canvas.width = Math.max(1, source.sw);
+        canvas.height = Math.max(1, source.sh);
+        ctx.drawImage(video, source.sx, source.sy, source.sw, source.sh, 0, 0, canvas.width, canvas.height);
+      }
+
+      function getCropRect() {
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+        const x = Number(cropX.value) / 100;
+        const y = Number(cropY.value) / 100;
+        const w = Number(cropW.value) / 100;
+        const h = Number(cropH.value) / 100;
+        const sx = Math.min(vw - 1, Math.floor(vw * x));
+        const sy = Math.min(vh - 1, Math.floor(vh * y));
+        const sw = Math.max(1, Math.min(vw - sx, Math.floor(vw * w)));
+        const sh = Math.max(1, Math.min(vh - sy, Math.floor(vh * h)));
+        return { sx, sy, sw, sh };
+      }
+
+      function setCrop(x, y, w, h) {
+        cropX.value = x;
+        cropY.value = y;
+        cropW.value = w;
+        cropH.value = h;
+        drawPreview();
+      }
+
+      async function matchText(text, options = {}) {
+        const cleaned = String(text || "").trim();
+        if (!cleaned) {
+          statusEl.textContent = "OCR 没识别到文本";
+          renderResult({ match_count: 0, candidate_count: 0, matches: [], raw_text_empty: true });
+          return;
+        }
+        const res = await fetch("/ocr/match", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            raw_text: cleaned,
+            threshold: Number(threshold.value || 0.72),
+          }),
+        });
+        const data = await res.json();
+        renderResult(data);
+        const time = new Date().toLocaleTimeString("zh-CN", { hour12: false });
+        const matchCount = Number(data.match_count || 0);
+        if (options.stopOnHit && matchCount > 0) {
+          freezeOnHit(matchCount, time);
+          return;
+        }
+        statusEl.textContent = `完成 ${time}: 命中 ${matchCount}`;
+      }
+
+      function freezeOnHit(matchCount, time) {
+        frozenOnHit = true;
+        if (timer) window.clearInterval(timer);
+        timer = null;
+        startLoop.disabled = false;
+        stopLoop.disabled = true;
+        runOnce.disabled = false;
+        statusEl.textContent = `已命中 ${matchCount} 个历史玩家，自动识别已停止并保留结果 ${time}`;
+      }
+
+      function renderResult(data) {
+        summaryEl.textContent = `match_count: ${data.match_count || 0} / candidate_count: ${data.candidate_count || 0}`;
+        matchesEl.innerHTML = "";
+        for (const item of data.matches || []) {
+          const tr = document.createElement("tr");
+          const confidenceClass = item.confidence >= 0.9 ? "good" : item.confidence < 0.78 ? "bad" : "";
+          tr.innerHTML = `
+            <td>${escapeHtml(item.matched_name || item.ocr_line || "-")}</td>
+            <td><code>${escapeHtml(item.matched_player_id || "-")}</code></td>
+            <td class="${confidenceClass}">${escapeHtml(String(item.confidence || "-"))}</td>
+            <td>${escapeHtml(String(item.player?.encounter_count || 0))} 次</td>
+          `;
+          matchesEl.appendChild(tr);
+        }
+        rawJson.textContent = JSON.stringify(data, null, 2);
+      }
+
+      function stopAll() {
+        if (timer) window.clearInterval(timer);
+        timer = null;
+        frozenOnHit = false;
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+        }
+        stream = null;
+        startLoop.disabled = true;
+        stopLoop.disabled = true;
+        runOnce.disabled = true;
+        statusEl.textContent = "采集已结束";
+      }
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+    </script>
+  </body>
+</html>

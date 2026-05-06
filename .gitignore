@@ -1,0 +1,14 @@
+.DS_Store
+*.py[cod]
+__pycache__/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+backend/.venv/
+backend/src/*.egg-info/
+
+backend/runtime/*.db
+backend/runtime/*.lock
+backend/runtime/*.json
+backend/runtime/logs/

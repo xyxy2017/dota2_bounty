@@ -83,6 +83,9 @@ def _build_static_file_map(ui_dir: Path) -> dict[str, Path]:
     return {
         "/": ui_dir / "index.html",
         "/index.html": ui_dir / "index.html",
+        "/debug/roster/live": ui_dir / "debug_roster_live.html",
+        "/debug/ocr": ui_dir / "debug_ocr.html",
+        "/debug/ocr/live": ui_dir / "debug_ocr_live.html",
         "/app.js": ui_dir / "app.js",
         "/styles.css": ui_dir / "styles.css",
     }

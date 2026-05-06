@@ -183,6 +183,13 @@ class EncountersRepository:
                             source = ?,
                             updated_at = ?
                         WHERE temp_match_key = ? AND player_steam_id = ?
+                          AND NOT EXISTS (
+                              SELECT 1
+                              FROM encounters existing
+                              WHERE existing.match_id = ?
+                                AND existing.player_steam_id = ?
+                                AND existing.id != encounters.id
+                          )
                         """,
                         (
                             resolved.match_id,
@@ -196,6 +203,8 @@ class EncountersRepository:
                             resolved.source,
                             now,
                             resolved.temp_match_key,
+                            p.player_id,
+                            resolved.match_id,
                             p.player_id,
                         ),
                     )
@@ -242,6 +251,16 @@ class EncountersRepository:
                     updated += upsert_cursor.rowcount
                 else:
                     updated += matched
+            if resolved.temp_match_key:
+                conn.execute(
+                    """
+                    DELETE FROM encounters
+                    WHERE temp_match_key = ?
+                      AND match_id IS NULL
+                      AND data_status = ?
+                    """,
+                    (resolved.temp_match_key, DataStatus.PENDING.value),
+                )
         return updated
 
     def list_pending_temp_match_keys(self, limit: int = 50) -> list[str]:

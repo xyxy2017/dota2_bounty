@@ -37,6 +37,10 @@ class HistoryMatchService:
             if not player_record:
                 continue
             snapshot = snapshots.get(player_id, {})
+            has_actionable_history = bool(snapshot) and int(snapshot.get("encounter_count") or 0) > 0
+            has_operator_meta = bool(player_record["tag"] or player_record["note"])
+            if not has_actionable_history and not has_operator_meta:
+                continue
             hit = HistoricalHit(
                 player_id=player_id,
                 latest_name=player_record["latest_name"],
