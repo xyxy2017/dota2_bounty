@@ -19,9 +19,17 @@ class OcrMatchService:
         threshold: float = 0.72,
         candidate_limit: int = 1000,
         exclude_player_id: str | None = None,
+        min_encounters: int = 1,
+        require_tagged: bool = False,
     ) -> dict[str, Any]:
         extracted_lines = _extract_lines(raw_text=raw_text, lines=lines)
         candidates = self.players_repo.list_name_match_candidates(limit=candidate_limit)
+        candidates = [
+            candidate
+            for candidate in candidates
+            if int(candidate.get("encounter_count") or 0) >= min_encounters
+            and (not require_tagged or bool(candidate.get("tag") or candidate.get("note")))
+        ]
         if exclude_player_id:
             candidates = [
                 candidate
@@ -72,6 +80,8 @@ class OcrMatchService:
             "matches": matches,
             "unmatched_lines": unmatched_lines,
             "threshold": threshold,
+            "min_encounters": min_encounters,
+            "require_tagged": require_tagged,
             "candidate_count": len(candidates),
             "note": "OCR only matches visible names to historical aliases; it cannot prove live account_id.",
         }

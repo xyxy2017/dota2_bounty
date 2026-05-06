@@ -212,11 +212,14 @@ class Supervisor:
             if method == "POST" and path == "/ocr/match":
                 data = payload or {}
                 threshold = _to_bounded_float(data.get("threshold"), 0.72, 0.1, 1.0)
+                min_encounters = _to_bounded_int(data.get("min_encounters"), 2, 1, 1000)
                 result = self.ocr_match_service.match_text(
                     raw_text=data.get("raw_text"),
                     lines=data.get("lines") if isinstance(data.get("lines"), list) else None,
                     threshold=threshold,
                     exclude_player_id=str(data.get("exclude_player_id") or self.settings.default_account_id or ""),
+                    min_encounters=min_encounters,
+                    require_tagged=bool(data.get("require_tagged")),
                 )
                 self.events_repo.append_event(
                     "ocr_roster_matched",
@@ -224,6 +227,8 @@ class Supervisor:
                         "match_count": result["match_count"],
                         "extracted_line_count": len(result["extracted_lines"]),
                         "threshold": threshold,
+                        "min_encounters": min_encounters,
+                        "require_tagged": bool(data.get("require_tagged")),
                         "published_alerts": bool(data.get("publish_alerts") and result.get("matches")),
                     },
                 )

@@ -239,6 +239,8 @@
             <label class="pill"><input id="skipSameFrame" type="checkbox" checked /> skip same frame</label>
             <label class="pill"><input id="publishAlerts" type="checkbox" checked /> publish alerts</label>
             <span class="pill">confirm <input id="confirmHitScans" type="number" min="1" max="5" step="1" value="1" style="width: 56px" /> scans</span>
+            <span class="pill">min encounters <input id="minEncounters" type="number" min="1" max="1000" step="1" value="2" style="width: 70px" /></span>
+            <label class="pill"><input id="requireTagged" type="checkbox" /> tagged only</label>
             <button id="presetDraftTop">选人顶部昵称栏</button>
             <button id="presetDraftBottom">选人底部昵称栏</button>
             <button id="presetFull">全画面</button>
@@ -274,6 +276,7 @@
                 <th>ID</th>
                 <th>置信度</th>
                 <th>历史</th>
+                <th>标记</th>
               </tr>
             </thead>
             <tbody id="matches"></tbody>
@@ -312,6 +315,8 @@
       const skipSameFrame = document.getElementById("skipSameFrame");
       const publishAlerts = document.getElementById("publishAlerts");
       const confirmHitScans = document.getElementById("confirmHitScans");
+      const minEncounters = document.getElementById("minEncounters");
+      const requireTagged = document.getElementById("requireTagged");
       const cropX = document.getElementById("cropX");
       const cropY = document.getElementById("cropY");
       const cropW = document.getElementById("cropW");
@@ -398,6 +403,8 @@
         skipSameFrame,
         publishAlerts,
         confirmHitScans,
+        minEncounters,
+        requireTagged,
       ].forEach((input) => input.addEventListener("change", saveSettings));
 
       async function runOcrOnce() {
@@ -536,6 +543,8 @@
           body: JSON.stringify({
             raw_text: cleaned,
             threshold: Number(threshold.value || 0.72),
+            min_encounters: Number(minEncounters.value || 2),
+            require_tagged: requireTagged.checked,
           }),
         });
         const data = await res.json();
@@ -576,6 +585,8 @@
           body: JSON.stringify({
             raw_text: text,
             threshold: Number(threshold.value || 0.72),
+            min_encounters: Number(minEncounters.value || 2),
+            require_tagged: requireTagged.checked,
             publish_alerts: true,
           }),
         });
@@ -613,6 +624,7 @@
             <td><code>${escapeHtml(item.matched_player_id || "-")}</code></td>
             <td class="${confidenceClass}">${escapeHtml(String(item.confidence || "-"))}</td>
             <td>${escapeHtml(String(item.player?.encounter_count || 0))} 次</td>
+            <td>${escapeHtml(item.player?.tag || item.player?.note || "-")}</td>
           `;
           matchesEl.appendChild(tr);
         }
@@ -668,6 +680,8 @@
           skipSameFrame: skipSameFrame.checked,
           publishAlerts: publishAlerts.checked,
           confirmHitScans: confirmHitScans.value,
+          minEncounters: minEncounters.value,
+          requireTagged: requireTagged.checked,
         };
         localStorage.setItem("dota2-bounty-ocr-live-settings", JSON.stringify(settings));
         hasStoredSettings = true;
@@ -689,6 +703,8 @@
           skipSameFrame.checked = settings.skipSameFrame ?? skipSameFrame.checked;
           publishAlerts.checked = settings.publishAlerts ?? publishAlerts.checked;
           confirmHitScans.value = settings.confirmHitScans ?? confirmHitScans.value;
+          minEncounters.value = settings.minEncounters ?? minEncounters.value;
+          requireTagged.checked = settings.requireTagged ?? requireTagged.checked;
           return true;
         } catch {
           localStorage.removeItem("dota2-bounty-ocr-live-settings");

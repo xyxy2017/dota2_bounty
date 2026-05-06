@@ -33,6 +33,17 @@ pip install -e .
 
 ## 4. Start Backend
 
+Recommended one-command restart:
+
+```powershell
+.\backend\scripts\start_backend.ps1 -OpenDashboard -OpenOcrLive
+```
+
+The script stops any old process on port 8000, removes a stale backend lock,
+starts the backend, checks `/health`, and optionally opens the dashboard/OCR page.
+
+Manual start:
+
 ```powershell
 cd backend
 $env:PYTHONPATH="src"
@@ -107,6 +118,27 @@ python scripts\backfill_recent.py --mode resolve --limit 20
 4. Check if 当前提醒 updates.
 5. After match, run backfill again.
 6. Enter next match and validate repeat-player hits.
+
+## 8.1 Live OCR Draft Test
+
+Open:
+
+- `http://127.0.0.1:8000/debug/ocr/live`
+
+Recommended settings:
+
+- `选人顶部昵称栏` first; if names are below hero portraits, use `选人底部昵称栏`.
+- `interval`: `6s`
+- `threshold`: `0.72` to start, raise to `0.82` if false positives appear.
+- `min encounters`: `2` or higher.
+- `tagged only`: enable it for ranked/live use if you only want important marked players.
+- `confirm scans`: `2` for safer live alerts, `1` for faster but noisier alerts.
+
+Notes:
+
+- OCR is nickname-based and cannot prove the live account id.
+- Post-match backfill remains the source of truth for real account ids.
+- If a hit appears, the page stops automatically and publishes to `/alerts/current`.
 
 ## 9. Logs and Runtime Files
 
