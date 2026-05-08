@@ -241,9 +241,12 @@
             <span class="pill">confirm <input id="confirmHitScans" type="number" min="1" max="5" step="1" value="1" style="width: 56px" /> scans</span>
             <span class="pill">min encounters <input id="minEncounters" type="number" min="1" max="1000" step="1" value="2" style="width: 70px" /></span>
             <label class="pill"><input id="requireTagged" type="checkbox" /> tagged only</label>
-            <button id="presetDraftTop">顶部昵称栏-中</button>
-            <button id="presetDraftTopHigh">顶部昵称栏-上</button>
-            <button id="presetDraftTopLow">顶部昵称栏-下</button>
+            <button id="presetDraftTop">顶部昵称栏-全</button>
+            <button id="presetDraftTopTight">顶部昵称栏-紧</button>
+            <button id="presetDraftTopLeft">顶部昵称栏-左5</button>
+            <button id="presetDraftTopRight">顶部昵称栏-右5</button>
+            <button id="presetDraftTopHigh">顶部昵称栏-偏上</button>
+            <button id="presetDraftTopLow">顶部昵称栏-偏下</button>
             <button id="presetDraftBottom">选人底部昵称栏</button>
             <button id="presetFull">全画面</button>
             <button id="presetCenter">中间区域</button>
@@ -258,10 +261,10 @@
           </div>
 
           <div class="crop-grid">
-            <label class="range">x% <span id="cropXValue">3</span><input id="cropX" type="range" min="0" max="95" value="3" /></label>
-            <label class="range">y% <span id="cropYValue">20</span><input id="cropY" type="range" min="0" max="95" value="20" /></label>
-            <label class="range">w% <span id="cropWValue">94</span><input id="cropW" type="range" min="5" max="100" value="94" /></label>
-            <label class="range">h% <span id="cropHValue">8</span><input id="cropH" type="range" min="3" max="100" value="8" /></label>
+            <label class="range">x% <span id="cropXValue">10</span><input id="cropX" type="range" min="0" max="95" value="10" /></label>
+            <label class="range">y% <span id="cropYValue">7</span><input id="cropY" type="range" min="0" max="95" value="7" /></label>
+            <label class="range">w% <span id="cropWValue">80</span><input id="cropW" type="range" min="5" max="100" value="80" /></label>
+            <label class="range">h% <span id="cropHValue">4</span><input id="cropH" type="range" min="3" max="100" value="4" /></label>
           </div>
         </section>
 
@@ -336,7 +339,7 @@
       let lastFrameFingerprint = null;
       let stableHitKey = null;
       let stableHitCount = 0;
-      const SETTINGS_VERSION = 2;
+      const SETTINGS_VERSION = 3;
 
       let hasStoredSettings = loadSettings();
       refreshDebugStatus();
@@ -356,7 +359,7 @@
           if (hasStoredSettings) {
             drawPreview();
           } else {
-            setCrop(3, 20, 94, 8);
+            setCrop(10, 7, 80, 4);
           }
         } catch (err) {
           statusEl.textContent = `授权失败: ${err.message || err}`;
@@ -390,9 +393,12 @@
       runOnce.addEventListener("click", runOcrOnce);
       refreshDebug.addEventListener("click", refreshDebugStatus);
 
-      document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(3, 20, 94, 8));
-      document.getElementById("presetDraftTopHigh").addEventListener("click", () => setCrop(3, 16, 94, 8));
-      document.getElementById("presetDraftTopLow").addEventListener("click", () => setCrop(3, 24, 94, 8));
+      document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(10, 7, 80, 4));
+      document.getElementById("presetDraftTopTight").addEventListener("click", () => setCrop(10, 8, 80, 3));
+      document.getElementById("presetDraftTopLeft").addEventListener("click", () => setCrop(10, 7, 33, 4));
+      document.getElementById("presetDraftTopRight").addEventListener("click", () => setCrop(57, 7, 33, 4));
+      document.getElementById("presetDraftTopHigh").addEventListener("click", () => setCrop(10, 6, 80, 4));
+      document.getElementById("presetDraftTopLow").addEventListener("click", () => setCrop(10, 9, 80, 4));
       document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(3, 80, 94, 8));
       document.getElementById("presetFull").addEventListener("click", () => setCrop(0, 0, 100, 100));
       document.getElementById("presetCenter").addEventListener("click", () => setCrop(18, 8, 64, 84));
