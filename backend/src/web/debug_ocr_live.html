@@ -241,7 +241,9 @@
             <span class="pill">confirm <input id="confirmHitScans" type="number" min="1" max="5" step="1" value="1" style="width: 56px" /> scans</span>
             <span class="pill">min encounters <input id="minEncounters" type="number" min="1" max="1000" step="1" value="2" style="width: 70px" /></span>
             <label class="pill"><input id="requireTagged" type="checkbox" /> tagged only</label>
-            <button id="presetDraftTop">选人顶部昵称栏</button>
+            <button id="presetDraftTop">顶部昵称栏-中</button>
+            <button id="presetDraftTopHigh">顶部昵称栏-上</button>
+            <button id="presetDraftTopLow">顶部昵称栏-下</button>
             <button id="presetDraftBottom">选人底部昵称栏</button>
             <button id="presetFull">全画面</button>
             <button id="presetCenter">中间区域</button>
@@ -256,10 +258,10 @@
           </div>
 
           <div class="crop-grid">
-            <label class="range">x% <input id="cropX" type="range" min="0" max="95" value="4" /></label>
-            <label class="range">y% <input id="cropY" type="range" min="0" max="95" value="10" /></label>
-            <label class="range">w% <input id="cropW" type="range" min="5" max="100" value="92" /></label>
-            <label class="range">h% <input id="cropH" type="range" min="5" max="100" value="15" /></label>
+            <label class="range">x% <span id="cropXValue">3</span><input id="cropX" type="range" min="0" max="95" value="3" /></label>
+            <label class="range">y% <span id="cropYValue">20</span><input id="cropY" type="range" min="0" max="95" value="20" /></label>
+            <label class="range">w% <span id="cropWValue">94</span><input id="cropW" type="range" min="5" max="100" value="94" /></label>
+            <label class="range">h% <span id="cropHValue">8</span><input id="cropH" type="range" min="3" max="100" value="8" /></label>
           </div>
         </section>
 
@@ -321,6 +323,10 @@
       const cropY = document.getElementById("cropY");
       const cropW = document.getElementById("cropW");
       const cropH = document.getElementById("cropH");
+      const cropXValue = document.getElementById("cropXValue");
+      const cropYValue = document.getElementById("cropYValue");
+      const cropWValue = document.getElementById("cropWValue");
+      const cropHValue = document.getElementById("cropHValue");
 
       let stream = null;
       let timer = null;
@@ -330,6 +336,7 @@
       let lastFrameFingerprint = null;
       let stableHitKey = null;
       let stableHitCount = 0;
+      const SETTINGS_VERSION = 2;
 
       let hasStoredSettings = loadSettings();
       refreshDebugStatus();
@@ -349,7 +356,7 @@
           if (hasStoredSettings) {
             drawPreview();
           } else {
-            setCrop(4, 10, 92, 15);
+            setCrop(3, 20, 94, 8);
           }
         } catch (err) {
           statusEl.textContent = `授权失败: ${err.message || err}`;
@@ -383,8 +390,10 @@
       runOnce.addEventListener("click", runOcrOnce);
       refreshDebug.addEventListener("click", refreshDebugStatus);
 
-      document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(4, 10, 92, 15));
-      document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(4, 72, 92, 16));
+      document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(3, 20, 94, 8));
+      document.getElementById("presetDraftTopHigh").addEventListener("click", () => setCrop(3, 16, 94, 8));
+      document.getElementById("presetDraftTopLow").addEventListener("click", () => setCrop(3, 24, 94, 8));
+      document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(3, 80, 94, 8));
       document.getElementById("presetFull").addEventListener("click", () => setCrop(0, 0, 100, 100));
       document.getElementById("presetCenter").addEventListener("click", () => setCrop(18, 8, 64, 84));
       document.getElementById("presetLeft").addEventListener("click", () => setCrop(0, 8, 50, 84));
@@ -445,6 +454,7 @@
       }
 
       function drawPreview() {
+        updateCropValueLabels();
         if (!video.videoWidth || !video.videoHeight) return;
         const source = getCropRect();
         const scale = preprocessScale(preprocessMode.value);
@@ -476,6 +486,13 @@
         lastFrameFingerprint = null;
         drawPreview();
         saveSettings();
+      }
+
+      function updateCropValueLabels() {
+        cropXValue.textContent = cropX.value;
+        cropYValue.textContent = cropY.value;
+        cropWValue.textContent = cropW.value;
+        cropHValue.textContent = cropH.value;
       }
 
       function preprocessScale(mode) {
@@ -669,6 +686,7 @@
 
       function saveSettings() {
         const settings = {
+          version: SETTINGS_VERSION,
           cropX: cropX.value,
           cropY: cropY.value,
           cropW: cropW.value,
@@ -692,10 +710,16 @@
           const raw = localStorage.getItem("dota2-bounty-ocr-live-settings");
           if (!raw) return false;
           const settings = JSON.parse(raw);
+          if (settings.version !== SETTINGS_VERSION) {
+            localStorage.removeItem("dota2-bounty-ocr-live-settings");
+            updateCropValueLabels();
+            return false;
+          }
           cropX.value = settings.cropX ?? cropX.value;
           cropY.value = settings.cropY ?? cropY.value;
           cropW.value = settings.cropW ?? cropW.value;
           cropH.value = settings.cropH ?? cropH.value;
+          updateCropValueLabels();
           intervalSec.value = settings.intervalSec ?? intervalSec.value;
           threshold.value = settings.threshold ?? threshold.value;
           ocrLang.value = settings.ocrLang ?? ocrLang.value;
