@@ -241,6 +241,7 @@
             <span class="pill">confirm <input id="confirmHitScans" type="number" min="1" max="5" step="1" value="1" style="width: 56px" /> scans</span>
             <span class="pill">min encounters <input id="minEncounters" type="number" min="1" max="1000" step="1" value="2" style="width: 70px" /></span>
             <label class="pill"><input id="requireTagged" type="checkbox" /> tagged only</label>
+            <label class="pill"><input id="splitTopOcr" type="checkbox" checked /> split top OCR</label>
             <button id="presetDraftTop">顶部昵称栏-全</button>
             <button id="presetDraftTopTight">顶部昵称栏-紧</button>
             <button id="presetDraftTopLeft">顶部昵称栏-左5</button>
@@ -322,6 +323,7 @@
       const confirmHitScans = document.getElementById("confirmHitScans");
       const minEncounters = document.getElementById("minEncounters");
       const requireTagged = document.getElementById("requireTagged");
+      const splitTopOcr = document.getElementById("splitTopOcr");
       const cropX = document.getElementById("cropX");
       const cropY = document.getElementById("cropY");
       const cropW = document.getElementById("cropW");
@@ -420,6 +422,7 @@
         confirmHitScans,
         minEncounters,
         requireTagged,
+        splitTopOcr,
       ].forEach((input) => input.addEventListener("change", saveSettings));
 
       async function runOcrOnce() {
@@ -443,14 +446,10 @@
           lastFrameFingerprint = fingerprint;
 
           statusEl.textContent = `OCR 中 ${lastRunAt.toLocaleTimeString("zh-CN", { hour12: false })}`;
-          const result = await Tesseract.recognize(canvas, ocrLang.value || "eng+chi_sim", {
-            logger: (m) => {
-              if (m.status && m.progress) {
-                statusEl.textContent = `${m.status} ${(m.progress * 100).toFixed(0)}%`;
-              }
-            },
-          });
-          rawText.value = result.data.text || "";
+          const text = splitTopOcr.checked
+            ? await recognizeSplitTop()
+            : await recognizeCanvas(canvas, "main");
+          rawText.value = text;
           await matchText(rawText.value, { stopOnHit: Boolean(timer) });
         } catch (err) {
           statusEl.textContent = `识别失败: ${err.message || err}`;
@@ -462,26 +461,52 @@
       function drawPreview() {
         updateCropValueLabels();
         if (!video.videoWidth || !video.videoHeight) return;
-        const source = getCropRect();
-        const scale = preprocessScale(preprocessMode.value);
-        canvas.width = Math.max(1, Math.min(1800, Math.floor(source.sw * scale)));
-        canvas.height = Math.max(1, Math.min(520, Math.floor(source.sh * scale)));
-        ctx.drawImage(video, source.sx, source.sy, source.sw, source.sh, 0, 0, canvas.width, canvas.height);
-        preprocessCanvas(preprocessMode.value);
+        renderCropToCanvas(getCropRect(), canvas);
       }
 
       function getCropRect() {
+        return cropRectFromPercent(
+          Number(cropX.value),
+          Number(cropY.value),
+          Number(cropW.value),
+          Number(cropH.value),
+        );
+      }
+
+      function cropRectFromPercent(xPercent, yPercent, wPercent, hPercent) {
         const vw = video.videoWidth;
         const vh = video.videoHeight;
-        const x = Number(cropX.value) / 100;
-        const y = Number(cropY.value) / 100;
-        const w = Number(cropW.value) / 100;
-        const h = Number(cropH.value) / 100;
-        const sx = Math.min(vw - 1, Math.floor(vw * x));
-        const sy = Math.min(vh - 1, Math.floor(vh * y));
-        const sw = Math.max(1, Math.min(vw - sx, Math.floor(vw * w)));
-        const sh = Math.max(1, Math.min(vh - sy, Math.floor(vh * h)));
+        const sx = Math.min(vw - 1, Math.floor(vw * xPercent / 100));
+        const sy = Math.min(vh - 1, Math.floor(vh * yPercent / 100));
+        const sw = Math.max(1, Math.min(vw - sx, Math.floor(vw * wPercent / 100)));
+        const sh = Math.max(1, Math.min(vh - sy, Math.floor(vh * hPercent / 100)));
         return { sx, sy, sw, sh };
+      }
+
+      function renderCropToCanvas(source, targetCanvas) {
+        const targetCtx = targetCanvas.getContext("2d");
+        const scale = boundedRenderScale(source, preprocessMode.value);
+        targetCanvas.width = Math.max(1, Math.floor(source.sw * scale));
+        targetCanvas.height = Math.max(1, Math.floor(source.sh * scale));
+        targetCtx.drawImage(
+          video,
+          source.sx,
+          source.sy,
+          source.sw,
+          source.sh,
+          0,
+          0,
+          targetCanvas.width,
+          targetCanvas.height,
+        );
+        preprocessCanvas(preprocessMode.value, targetCanvas);
+      }
+
+      function boundedRenderScale(source, mode) {
+        const baseScale = preprocessScale(mode);
+        const maxWidth = 2600;
+        const maxHeight = 520;
+        return Math.max(1, Math.min(baseScale, maxWidth / source.sw, maxHeight / source.sh));
       }
 
       function setCrop(x, y, w, h) {
@@ -507,9 +532,10 @@
         return 2.4;
       }
 
-      function preprocessCanvas(mode) {
-        if (mode === "none" || !canvas.width || !canvas.height) return;
-        const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      function preprocessCanvas(mode, targetCanvas = canvas) {
+        if (mode === "none" || !targetCanvas.width || !targetCanvas.height) return;
+        const targetCtx = targetCanvas.getContext("2d");
+        const image = targetCtx.getImageData(0, 0, targetCanvas.width, targetCanvas.height);
         const data = image.data;
         const contrast = mode === "sharp" || mode === "binary" ? 2.15 : 1.65;
         const brightness = mode === "binary" ? 12 : 8;
@@ -524,7 +550,32 @@
           data[i + 1] = value;
           data[i + 2] = value;
         }
-        ctx.putImageData(image, 0, 0);
+        targetCtx.putImageData(image, 0, 0);
+      }
+
+      async function recognizeSplitTop() {
+        const regions = [
+          ["left5", cropRectFromPercent(10, 7, 33, 4)],
+          ["right5", cropRectFromPercent(57, 7, 33, 4)],
+        ];
+        const texts = [];
+        for (const [label, rect] of regions) {
+          const tempCanvas = document.createElement("canvas");
+          renderCropToCanvas(rect, tempCanvas);
+          texts.push(await recognizeCanvas(tempCanvas, label));
+        }
+        return texts.filter(Boolean).join("\n");
+      }
+
+      async function recognizeCanvas(targetCanvas, label) {
+        const result = await Tesseract.recognize(targetCanvas, ocrLang.value || "eng+chi_sim", {
+          logger: (m) => {
+            if (m.status && m.progress) {
+              statusEl.textContent = `${label} ${m.status} ${(m.progress * 100).toFixed(0)}%`;
+            }
+          },
+        });
+        return result.data.text || "";
       }
 
       function computeFrameFingerprint() {
@@ -706,6 +757,7 @@
           confirmHitScans: confirmHitScans.value,
           minEncounters: minEncounters.value,
           requireTagged: requireTagged.checked,
+          splitTopOcr: splitTopOcr.checked,
         };
         localStorage.setItem("dota2-bounty-ocr-live-settings", JSON.stringify(settings));
         hasStoredSettings = true;
@@ -735,6 +787,7 @@
           confirmHitScans.value = settings.confirmHitScans ?? confirmHitScans.value;
           minEncounters.value = settings.minEncounters ?? minEncounters.value;
           requireTagged.checked = settings.requireTagged ?? requireTagged.checked;
+          splitTopOcr.checked = settings.splitTopOcr ?? splitTopOcr.checked;
           return true;
         } catch {
           localStorage.removeItem("dota2-bounty-ocr-live-settings");
