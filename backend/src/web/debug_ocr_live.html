@@ -243,16 +243,10 @@
             <label class="pill"><input id="requireTagged" type="checkbox" /> tagged only</label>
             <label class="pill"><input id="splitTopOcr" type="checkbox" checked /> split top OCR</label>
             <button id="presetDraftTop">顶部昵称栏-全</button>
-            <button id="presetDraftTopTight">顶部昵称栏-紧</button>
             <button id="presetDraftTopLeft">顶部昵称栏-左5</button>
             <button id="presetDraftTopRight">顶部昵称栏-右5</button>
-            <button id="presetDraftTopHigh">顶部昵称栏-偏上</button>
-            <button id="presetDraftTopLow">顶部昵称栏-偏下</button>
             <button id="presetDraftBottom">选人底部昵称栏</button>
             <button id="presetFull">全画面</button>
-            <button id="presetCenter">中间区域</button>
-            <button id="presetLeft">左半边</button>
-            <button id="presetRight">右半边</button>
           </div>
 
           <video id="video" autoplay muted playsinline></video>
@@ -396,16 +390,10 @@
       refreshDebug.addEventListener("click", refreshDebugStatus);
 
       document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(10, 7, 80, 4));
-      document.getElementById("presetDraftTopTight").addEventListener("click", () => setCrop(10, 8, 80, 3));
       document.getElementById("presetDraftTopLeft").addEventListener("click", () => setCrop(10, 7, 33, 4));
       document.getElementById("presetDraftTopRight").addEventListener("click", () => setCrop(57, 7, 33, 4));
-      document.getElementById("presetDraftTopHigh").addEventListener("click", () => setCrop(10, 6, 80, 4));
-      document.getElementById("presetDraftTopLow").addEventListener("click", () => setCrop(10, 9, 80, 4));
       document.getElementById("presetDraftBottom").addEventListener("click", () => setCrop(3, 80, 94, 8));
       document.getElementById("presetFull").addEventListener("click", () => setCrop(0, 0, 100, 100));
-      document.getElementById("presetCenter").addEventListener("click", () => setCrop(18, 8, 64, 84));
-      document.getElementById("presetLeft").addEventListener("click", () => setCrop(0, 8, 50, 84));
-      document.getElementById("presetRight").addEventListener("click", () => setCrop(50, 8, 50, 84));
       [cropX, cropY, cropW, cropH].forEach((input) => input.addEventListener("input", drawPreview));
       preprocessMode.addEventListener("change", drawPreview);
       [
