@@ -21,6 +21,20 @@ class Settings:
         default_factory=lambda: int(os.getenv("DOTA2_BOUNTY_OPENDOTA_BACKFILL_DEFAULT_LIMIT", "20"))
     )
     default_account_id: str | None = field(default_factory=lambda: os.getenv("DOTA2_BOUNTY_ACCOUNT_ID", "126600075"))
+    auto_ocr_enabled: bool = field(
+        default_factory=lambda: os.getenv("DOTA2_BOUNTY_AUTO_OCR_ENABLED", "0").lower() in {"1", "true", "yes", "on"}
+    )
+    auto_ocr_interval_seconds: float = field(
+        default_factory=lambda: float(os.getenv("DOTA2_BOUNTY_AUTO_OCR_INTERVAL_SECONDS", "6"))
+    )
+    auto_ocr_window_title: str = field(default_factory=lambda: os.getenv("DOTA2_BOUNTY_AUTO_OCR_WINDOW_TITLE", "Dota 2"))
+    auto_ocr_tesseract_path: str = field(default_factory=lambda: os.getenv("DOTA2_BOUNTY_TESSERACT_PATH", "tesseract"))
+    auto_ocr_threshold: float = field(default_factory=lambda: float(os.getenv("DOTA2_BOUNTY_AUTO_OCR_THRESHOLD", "0.72")))
+    auto_ocr_min_encounters: int = field(default_factory=lambda: int(os.getenv("DOTA2_BOUNTY_AUTO_OCR_MIN_ENCOUNTERS", "2")))
+    auto_ocr_require_tagged: bool = field(
+        default_factory=lambda: os.getenv("DOTA2_BOUNTY_AUTO_OCR_REQUIRE_TAGGED", "0").lower()
+        in {"1", "true", "yes", "on"}
+    )
 
     runtime_dir: Path = field(init=False)
     ui_dir: Path = field(init=False)
@@ -32,6 +46,7 @@ class Settings:
     hero_catalog_path: Path = field(init=False)
     log_file_path: Path = field(init=False)
     lock_file_path: Path = field(init=False)
+    auto_ocr_dir: Path = field(init=False)
 
     def __post_init__(self) -> None:
         runtime_dir = Path(os.getenv("DOTA2_BOUNTY_RUNTIME_DIR", self.base_dir / "runtime"))
@@ -58,3 +73,5 @@ class Settings:
         )
         self.log_file_path = Path(os.getenv("DOTA2_BOUNTY_LOG_FILE_PATH", logs_dir / "backend.log"))
         self.lock_file_path = Path(os.getenv("DOTA2_BOUNTY_LOCK_FILE_PATH", runtime_dir / "backend.lock"))
+        self.auto_ocr_dir = Path(os.getenv("DOTA2_BOUNTY_AUTO_OCR_DIR", runtime_dir / "auto-ocr"))
+        self.auto_ocr_dir.mkdir(parents=True, exist_ok=True)

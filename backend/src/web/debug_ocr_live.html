@@ -285,6 +285,9 @@
           <pre id="rawJson">{}</pre>
           <div class="toolbar">
             <button id="refreshDebug">刷新 OCR 诊断</button>
+            <button id="backendAutoStart">后端自动 OCR 开始</button>
+            <button id="backendAutoStop">后端自动 OCR 停止</button>
+            <button id="backendAutoOnce">后端识别一次</button>
             <a class="pill" href="/" target="_blank" rel="noreferrer">打开主页提醒</a>
             <a class="pill" href="/debug/ocr/status" target="_blank" rel="noreferrer">打开诊断 JSON</a>
           </div>
@@ -308,6 +311,9 @@
       const rawJson = document.getElementById("rawJson");
       const debugStatus = document.getElementById("debugStatus");
       const refreshDebug = document.getElementById("refreshDebug");
+      const backendAutoStart = document.getElementById("backendAutoStart");
+      const backendAutoStop = document.getElementById("backendAutoStop");
+      const backendAutoOnce = document.getElementById("backendAutoOnce");
       const threshold = document.getElementById("threshold");
       const intervalSec = document.getElementById("intervalSec");
       const ocrLang = document.getElementById("ocrLang");
@@ -388,6 +394,9 @@
 
       runOnce.addEventListener("click", runOcrOnce);
       refreshDebug.addEventListener("click", refreshDebugStatus);
+      backendAutoStart.addEventListener("click", () => callBackendAuto("/debug/ocr/auto/start"));
+      backendAutoStop.addEventListener("click", () => callBackendAuto("/debug/ocr/auto/stop"));
+      backendAutoOnce.addEventListener("click", () => callBackendAuto("/debug/ocr/auto/run-once"));
 
       document.getElementById("presetDraftTop").addEventListener("click", () => setCrop(10, 7, 80, 4));
       document.getElementById("presetDraftTopTight").addEventListener("click", () => setCrop(10, 8, 80, 3));
@@ -700,6 +709,21 @@
           debugStatus.textContent = JSON.stringify(data, null, 2);
         } catch (err) {
           debugStatus.textContent = `刷新失败: ${err.message || err}`;
+        }
+      }
+
+      async function callBackendAuto(path) {
+        try {
+          debugStatus.textContent = `calling ${path} ...`;
+          const res = await fetch(path, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ publish_alerts: true }),
+          });
+          const data = await res.json();
+          debugStatus.textContent = JSON.stringify(data, null, 2);
+        } catch (err) {
+          debugStatus.textContent = `后端自动 OCR 调用失败: ${err.message || err}`;
         }
       }
 

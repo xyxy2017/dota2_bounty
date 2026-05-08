@@ -13,6 +13,7 @@ from providers.result.mock_payload_provider import MockPayloadResultProvider
 from providers.result.noop_provider import NoopResultProvider
 from providers.result.open_dota_provider import OpenDotaResultProvider
 from services.backfill_service import OpenDotaBackfillService
+from services.auto_ocr_service import AutoOcrService
 from services.gsi_ingest_service import GsiIngestService
 from services.hero_catalog_service import HeroCatalogService
 from services.history_match_service import HistoryMatchService
@@ -91,6 +92,21 @@ class Supervisor:
         )
         self.operator_service = OperatorService(players_repo=self.players_repo)
         self.ocr_match_service = OcrMatchService(players_repo=self.players_repo)
+        self.auto_ocr_service = AutoOcrService(
+            output_dir=settings.auto_ocr_dir,
+            runtime_status=self.runtime_status,
+            ocr_match_service=self.ocr_match_service,
+            alerts_writer=self.alerts_writer,
+            events_repo=self.events_repo,
+            default_account_id=settings.default_account_id,
+            tesseract_path=settings.auto_ocr_tesseract_path,
+            window_title=settings.auto_ocr_window_title,
+            interval_seconds=settings.auto_ocr_interval_seconds,
+            threshold=settings.auto_ocr_threshold,
+            min_encounters=settings.auto_ocr_min_encounters,
+            require_tagged=settings.auto_ocr_require_tagged,
+            alert_payload_builder=_build_ocr_alerts_payload,
+        )
         self.query_service = QueryService(
             players_repo=self.players_repo,
             encounters_repo=self.encounters_repo,
@@ -128,9 +144,12 @@ class Supervisor:
         )
         self.alerts_writer.write({"hit_count": 0, "headline": None, "items": []})
         self._start_background_worker()
+        if self.settings.auto_ocr_enabled:
+            self.auto_ocr_service.start()
         self.logger.info("backend_started")
 
     def shutdown(self) -> None:
+        self.auto_ocr_service.stop()
         self._stop_background_worker()
         self.runtime_status.write({"state": "stopped"})
         self.alerts_writer.write({"hit_count": 0, "headline": None, "items": []})
@@ -173,6 +192,7 @@ class Supervisor:
         return {
             "current_alert": self.alerts_writer.read(),
             "last_ocr_match": self.runtime_status.read().get("last_ocr_match"),
+            "auto_ocr": self.auto_ocr_service.status(),
             "recent_ocr_events": ocr_events,
             "note": "OCR live alerts are nickname-based weak matches. Use post-match backfill for confirmed account_id.",
         }
@@ -205,6 +225,21 @@ class Supervisor:
 
             if method == "GET" and path == "/debug/ocr/status":
                 return 200, self._build_ocr_debug_status()
+
+            if method == "GET" and path == "/debug/ocr/auto":
+                return 200, self.auto_ocr_service.status()
+
+            if method == "POST" and path == "/debug/ocr/auto/start":
+                return 200, self.auto_ocr_service.start()
+
+            if method == "POST" and path == "/debug/ocr/auto/stop":
+                return 200, self.auto_ocr_service.stop()
+
+            if method == "POST" and path == "/debug/ocr/auto/run-once":
+                data = payload or {}
+                return 200, self.auto_ocr_service.run_once(
+                    publish_alerts=bool(data.get("publish_alerts", True))
+                )
 
             if method == "GET" and path == "/alerts/current":
                 return 200, self.alerts_writer.read()

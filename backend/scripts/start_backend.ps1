@@ -1,7 +1,9 @@
 param(
     [int]$Port = 8000,
     [switch]$OpenDashboard,
-    [switch]$OpenOcrLive
+    [switch]$OpenOcrLive,
+    [switch]$AutoOcr,
+    [string]$TesseractPath = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -28,6 +30,12 @@ if (Test-Path -LiteralPath $LockFile) {
 
 $env:DOTA2_BOUNTY_SERVER_PORT = [string]$Port
 $env:PYTHONPATH = "src"
+if ($AutoOcr) {
+    $env:DOTA2_BOUNTY_AUTO_OCR_ENABLED = "1"
+}
+if ($TesseractPath) {
+    $env:DOTA2_BOUNTY_TESSERACT_PATH = $TesseractPath
+}
 
 Write-Host "Starting Dota2 Bounty backend on http://127.0.0.1:$Port"
 Start-Process -FilePath $Python -ArgumentList "-m", "app.main" -WorkingDirectory $BackendDir -WindowStyle Hidden

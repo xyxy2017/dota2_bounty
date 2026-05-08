@@ -140,6 +140,42 @@ Notes:
 - Post-match backfill remains the source of truth for real account ids.
 - If a hit appears, the page stops automatically and publishes to `/alerts/current`.
 
+## 8.2 Backend Auto OCR
+
+Backend Auto OCR can capture the Dota 2 window without browser screen-share permission.
+It uses the same tight top-left/top-right draft-name regions:
+
+- left5: `x=10 y=8 w=33 h=3`
+- right5: `x=57 y=8 w=33 h=3`
+
+This feature is optional. Without Tesseract installed, it can still capture debug images,
+but it cannot convert the images into text.
+
+Install Tesseract for Windows, then start with:
+
+```powershell
+.\backend\scripts\start_backend.ps1 -AutoOcr -OpenDashboard -OpenOcrLive -TesseractPath "C:\Program Files\Tesseract-OCR\tesseract.exe"
+```
+
+Useful endpoints:
+
+- `GET http://127.0.0.1:8000/debug/ocr/auto`
+- `POST http://127.0.0.1:8000/debug/ocr/auto/run-once`
+- `POST http://127.0.0.1:8000/debug/ocr/auto/start`
+- `POST http://127.0.0.1:8000/debug/ocr/auto/stop`
+
+Runtime captures are written to:
+
+- `backend\runtime\auto-ocr\left5.png`
+- `backend\runtime\auto-ocr\right5.png`
+
+Performance notes:
+
+- Default interval is `6s`, so it is not continuously recording.
+- Each loop captures two small strips, not the whole screen.
+- OCR only runs when Tesseract is configured.
+- If you see FPS impact, raise `DOTA2_BOUNTY_AUTO_OCR_INTERVAL_SECONDS` to `10` or `15`.
+
 ## 9. Logs and Runtime Files
 
 Main paths:
