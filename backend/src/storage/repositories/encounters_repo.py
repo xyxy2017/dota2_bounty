@@ -212,42 +212,81 @@ class EncountersRepository:
 
                 if matched == 0:
                     encounter_id = sha1(f"{resolved.match_id}:{p.player_id}".encode("utf-8")).hexdigest()
-                    upsert_cursor = conn.execute(
+                    existing = conn.execute(
                         """
-                        INSERT INTO encounters (
-                            id, match_id, temp_match_key, player_steam_id, player_name,
-                            player_hero_id, my_hero_id, same_team, result, played_at,
-                            data_status, source, created_at, updated_at
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        ON CONFLICT(match_id, player_steam_id) DO UPDATE SET
-                            temp_match_key = COALESCE(excluded.temp_match_key, encounters.temp_match_key),
-                            player_name = COALESCE(excluded.player_name, encounters.player_name),
-                            player_hero_id = excluded.player_hero_id,
-                            my_hero_id = excluded.my_hero_id,
-                            same_team = excluded.same_team,
-                            result = excluded.result,
-                            played_at = excluded.played_at,
-                            data_status = excluded.data_status,
-                            source = excluded.source,
-                            updated_at = excluded.updated_at
+                        SELECT id
+                        FROM encounters
+                        WHERE match_id = ? AND player_steam_id = ?
                         """,
-                        (
-                            encounter_id,
-                            resolved.match_id,
-                            resolved.temp_match_key,
-                            p.player_id,
-                            p.name,
-                            p.hero_id,
-                            local_hero_id,
-                            same_team,
-                            resolved.result,
-                            played_at,
-                            DataStatus.COMPLETED.value,
-                            resolved.source,
-                            now,
-                            now,
-                        ),
-                    )
+                        (resolved.match_id, p.player_id),
+                    ).fetchone()
+                    if existing is None:
+                        existing = conn.execute(
+                            "SELECT id FROM encounters WHERE id = ?",
+                            (encounter_id,),
+                        ).fetchone()
+
+                    if existing is not None:
+                        upsert_cursor = conn.execute(
+                            """
+                            UPDATE encounters
+                            SET
+                                match_id = ?,
+                                temp_match_key = COALESCE(?, temp_match_key),
+                                player_steam_id = ?,
+                                player_name = COALESCE(?, player_name),
+                                player_hero_id = ?,
+                                my_hero_id = ?,
+                                same_team = ?,
+                                result = ?,
+                                played_at = ?,
+                                data_status = ?,
+                                source = ?,
+                                updated_at = ?
+                            WHERE id = ?
+                            """,
+                            (
+                                resolved.match_id,
+                                resolved.temp_match_key,
+                                p.player_id,
+                                p.name,
+                                p.hero_id,
+                                local_hero_id,
+                                same_team,
+                                resolved.result,
+                                played_at,
+                                DataStatus.COMPLETED.value,
+                                resolved.source,
+                                now,
+                                existing["id"],
+                            ),
+                        )
+                    else:
+                        upsert_cursor = conn.execute(
+                            """
+                            INSERT INTO encounters (
+                                id, match_id, temp_match_key, player_steam_id, player_name,
+                                player_hero_id, my_hero_id, same_team, result, played_at,
+                                data_status, source, created_at, updated_at
+                            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            """,
+                            (
+                                encounter_id,
+                                resolved.match_id,
+                                resolved.temp_match_key,
+                                p.player_id,
+                                p.name,
+                                p.hero_id,
+                                local_hero_id,
+                                same_team,
+                                resolved.result,
+                                played_at,
+                                DataStatus.COMPLETED.value,
+                                resolved.source,
+                                now,
+                                now,
+                            ),
+                        )
                     updated += upsert_cursor.rowcount
                 else:
                     updated += matched

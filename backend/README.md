@@ -86,6 +86,14 @@ python scripts/backfill_recent.py --mode resolve --limit 20
 - Alert feed: `backend/runtime/alerts.json`
 - Hero catalog cache: `backend/runtime/hero-catalog.json`
 
+## Auto OCR Foreground Rules
+
+- Auto OCR uses Windows `CopyFromScreen`, so capture follows desktop foreground/visibility restrictions.
+- Default behavior requires Dota 2 to already be foreground; otherwise state is `dota_not_foreground` and OCR is skipped.
+- Optional focus mode (`DOTA2_BOUNTY_AUTO_OCR_AUTO_FOCUS=1` or `.\scripts\start_backend.ps1 -AutoFocusDota`) attempts Restore/ShowWindow/SetForegroundWindow first.
+- Focus mode can interrupt the currently active window.
+- The capture helper declares DPI awareness before reading Dota 2 window coordinates, so scaled displays use physical pixels for capture regions.
+
 ## Current MVP scope
 
 - `POST /gsi` receives raw GSI payloads

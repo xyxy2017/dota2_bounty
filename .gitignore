@@ -7,8 +7,17 @@ __pycache__/
 
 backend/.venv/
 backend/src/*.egg-info/
+backend/build/
+backend/dist/
+
+backend/tools/tesseract/**
+!backend/tools/tesseract/
+!backend/tools/tesseract/README.md
 
 backend/runtime/*.db
 backend/runtime/*.lock
 backend/runtime/*.json
 backend/runtime/logs/
+backend/runtime/auto-ocr/
+backend/runtime/gsi-id-probe/
+backend/runtime/match-sessions/

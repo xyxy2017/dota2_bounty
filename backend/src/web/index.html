@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Dota2 Bounty Console</title>
-    <link rel="stylesheet" href="/styles.css?v=20260505-onepage" />
+    <link rel="stylesheet" href="/styles.css?v=20260515-gsi-probe" />
   </head>
   <body>
     <div class="shell">
@@ -13,13 +13,14 @@
           <p class="eyebrow">Local Control Panel</p>
           <h1>Dota2 Bounty Console</h1>
           <p class="subtitle">
-            看当前提醒、重复匹配玩家和最近历史，并直接维护标签与备注。
+            查看当前提醒、重复匹配玩家和最近历史，并直接维护标签与备注。
           </p>
         </div>
         <div class="hero-actions">
           <button id="refresh-all" class="button primary">刷新数据</button>
-          <a class="button ghost" href="/alerts/current" target="_blank" rel="noreferrer">查看 Alerts JSON</a>
-          <a class="button ghost" href="/debug/ocr/live" target="_blank" rel="noreferrer">自动 OCR</a>
+          <a class="button ghost" href="/alerts/current" target="_blank" rel="noreferrer">Alerts JSON</a>
+          <a class="button ghost" href="/debug/ocr/live" target="_blank" rel="noreferrer">调试导航</a>
+          <a class="button ghost" href="/debug/gsi/id-probe-ui" target="_blank" rel="noreferrer">GSI ID 探针</a>
         </div>
       </header>
 
@@ -52,7 +53,7 @@
               <p class="panel-label">重复匹配</p>
               <h2>高频玩家</h2>
             </div>
-            <span class="meta">按提醒优先级与交手次数查看</span>
+            <span class="meta">按提醒优先级与交手次数排序</span>
           </div>
           <div id="repeats-list" class="stack"></div>
         </section>
@@ -86,7 +87,7 @@
             </label>
             <label>
               <span>自定义备注</span>
-              <textarea id="note-input" rows="4" placeholder="例如：这人喜欢打中路，容易上头"></textarea>
+              <textarea id="note-input" rows="4" placeholder="例如：喜欢打中路，容易上头"></textarea>
             </label>
             <div class="editor-actions">
               <button type="submit" class="button primary">保存标签</button>
@@ -136,6 +137,6 @@
       </article>
     </template>
 
-    <script src="/app.js?v=20260505-onepage"></script>
+    <script src="/app.js?v=20260515-gsi-probe"></script>
   </body>
 </html>

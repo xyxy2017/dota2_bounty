@@ -4,6 +4,7 @@ const state = {
   players: [],
   repeats: [],
 };
+
 const SELF_PLAYER_ID = "126600075";
 
 async function api(path, options = {}) {
@@ -44,6 +45,8 @@ async function loadDashboard() {
     if (firstCandidate) {
       await selectPlayer(firstCandidate);
     }
+  } else {
+    highlightSelected(state.selectedPlayerId);
   }
 }
 
@@ -61,7 +64,7 @@ function renderAlerts(data) {
     node.dataset.playerId = item.player_id;
     node.querySelector(".card-title").textContent = item.player_name || item.player_id;
     node.querySelector(".card-summary").textContent = item.summary_text || "暂无摘要";
-    node.querySelector(".badge").textContent = item.tag || `${item.encounter_count}次`;
+    node.querySelector(".badge").textContent = item.tag || `${item.encounter_count || 0} 次`;
     node.addEventListener("click", () => selectPlayer(item.player_id));
     list.appendChild(node);
   }
@@ -79,7 +82,7 @@ function renderSummary(data) {
   for (const [label, value] of cards) {
     const item = document.createElement("article");
     item.className = "stat";
-    item.innerHTML = `<div class="stat-label">${label}</div><div class="stat-value">${value ?? 0}</div>`;
+    item.innerHTML = `<div class="stat-label">${escapeHtml(label)}</div><div class="stat-value">${value ?? 0}</div>`;
     container.appendChild(item);
   }
 }
@@ -87,13 +90,17 @@ function renderSummary(data) {
 function renderRepeats(items) {
   const list = document.querySelector("#repeats-list");
   list.innerHTML = "";
+  if (!items.length) {
+    list.appendChild(emptyCard("暂无重复匹配玩家"));
+    return;
+  }
   for (const item of items) {
     const node = document.querySelector("#repeat-item-template").content.firstElementChild.cloneNode(true);
     node.dataset.playerId = item.player_id;
     node.querySelector(".card-title").textContent = item.latest_name || item.player_id;
     node.querySelector(".card-summary").textContent =
-      `交手 ${item.encounter_count} 次，${item.teammate_count} 次队友 / ${item.opponent_count} 次对手`;
-    node.querySelector(".badge").textContent = `${item.win_count}W-${item.lose_count}L`;
+      `交手 ${item.encounter_count || 0} 次，${item.teammate_count || 0} 次队友 / ${item.opponent_count || 0} 次对手`;
+    node.querySelector(".badge").textContent = `${item.win_count || 0}W-${item.lose_count || 0}L`;
     node.addEventListener("click", () => selectPlayer(item.player_id));
     list.appendChild(node);
   }
@@ -102,6 +109,10 @@ function renderRepeats(items) {
 function renderPlayers(items) {
   const list = document.querySelector("#players-list");
   list.innerHTML = "";
+  if (!items.length) {
+    list.appendChild(emptyCard("暂无最近玩家"));
+    return;
+  }
   for (const item of items) {
     const node = document.querySelector("#player-item-template").content.firstElementChild.cloneNode(true);
     node.dataset.playerId = item.steam_id;
@@ -128,6 +139,7 @@ function renderTagOptions() {
 }
 
 async function selectPlayer(playerId) {
+  if (!playerId) return;
   state.selectedPlayerId = playerId;
   highlightSelected(playerId);
   const data = await api(`/players/${encodeURIComponent(playerId)}/history-summary?limit=8`);
@@ -141,16 +153,19 @@ function highlightSelected(playerId) {
 }
 
 function renderDetail(data) {
-  const player = data.player;
-  const summary = data.summary;
-  document.querySelector("#detail-title").textContent = player.latest_name || player.steam_id;
-  document.querySelector("#detail-meta").textContent = player.steam_id;
+  const player = data.player || {};
+  const summary = data.summary || {};
+  document.querySelector("#detail-title").textContent = player.latest_name || player.steam_id || "未知玩家";
+  document.querySelector("#detail-meta").textContent = player.steam_id || "";
   document.querySelector("#tag-select").value = player.tag || "";
   document.querySelector("#note-input").value = player.note || "";
-  document.querySelector("#detail-summary").classList.remove("empty");
-  document.querySelector("#detail-summary").textContent =
-    `累计 ${summary.encounter_count} 次，${summary.teammate_count} 次队友 / ${summary.opponent_count} 次对手，` +
-    `${summary.win_count} 胜 ${summary.lose_count} 负。最近一次：${formatRelation(summary.last_same_team)}，` +
+
+  const detailSummary = document.querySelector("#detail-summary");
+  detailSummary.classList.remove("empty");
+  detailSummary.textContent =
+    `累计 ${summary.encounter_count || 0} 次，${summary.teammate_count || 0} 次队友 / ` +
+    `${summary.opponent_count || 0} 次对手，${summary.win_count || 0} 胜 ${summary.lose_count || 0} 负。` +
+    `最近一次：${formatRelation(summary.last_same_team)}，` +
     `${summary.last_player_hero_name || heroFallback(summary.last_player_hero_id)}，` +
     `${formatResult(summary.last_result)}。`;
 
@@ -164,10 +179,13 @@ function renderDetail(data) {
     card.innerHTML = `
       <div class="card-top">
         <div>
-          <h3 class="card-title">${item.match_id || "unknown match"}</h3>
-          <p class="card-summary">${formatDate(item.played_at)} · ${formatRelation(item.same_team)} · 对方 ${playerHero} · 我方 ${myHero} · ${formatResult(item.result)}</p>
+          <h3 class="card-title">${escapeHtml(item.match_id || "unknown match")}</h3>
+          <p class="card-summary">
+            ${escapeHtml(formatDate(item.played_at))} · ${escapeHtml(formatRelation(item.same_team))}
+            · 对方 ${escapeHtml(playerHero)} · 我方 ${escapeHtml(myHero)} · ${escapeHtml(formatResult(item.result))}
+          </p>
         </div>
-        <span class="badge muted">${item.source || "unknown"}</span>
+        <span class="badge muted">${escapeHtml(item.source || "unknown")}</span>
       </div>
     `;
     history.appendChild(card);
@@ -185,6 +203,13 @@ async function savePlayerMeta(event) {
   });
   await loadDashboard();
   await selectPlayer(state.selectedPlayerId);
+}
+
+function emptyCard(message) {
+  const card = document.createElement("article");
+  card.className = "card";
+  card.textContent = message;
+  return card;
 }
 
 function formatDate(value) {
@@ -208,7 +233,16 @@ function formatResult(value) {
 
 function heroFallback(heroId, heroName) {
   if (heroName) return heroName;
-  return "未知英雄";
+  return heroId ? `英雄 ${heroId}` : "未知英雄";
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 document.querySelector("#refresh-all").addEventListener("click", () => loadDashboard());
@@ -221,5 +255,5 @@ document.querySelector("#player-form").addEventListener("submit", savePlayerMeta
 
 loadDashboard().catch((error) => {
   console.error(error);
-  document.querySelector("#alert-headline").textContent = `加载失败: ${error.message}`;
+  document.querySelector("#alert-headline").textContent = `加载失败：${error.message}`;
 });

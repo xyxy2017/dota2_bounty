@@ -101,7 +101,7 @@ def _extract_lines(*, raw_text: str | None, lines: list[str] | None) -> list[str
         if not line:
             continue
         normalized = _normalize_name(line)
-        if len(normalized) < 2 or normalized in seen or _looks_like_ui_noise(normalized):
+        if not _is_matchable_token(normalized) or normalized in seen or _looks_like_ui_noise(normalized):
             continue
         seen.add(normalized)
         result.append(line)
@@ -162,7 +162,7 @@ def _aliases_for_candidate(candidate: dict) -> list[str]:
     for alias in aliases:
         cleaned = _clean_line(alias)
         normalized = _normalize_name(cleaned)
-        if cleaned and normalized and normalized not in seen:
+        if cleaned and _is_matchable_token(normalized) and normalized not in seen:
             seen.add(normalized)
             result.append(cleaned)
     return result
@@ -171,14 +171,20 @@ def _aliases_for_candidate(candidate: dict) -> list[str]:
 def _score(ocr_line: str, alias: str) -> tuple[float, str]:
     normalized_line = _normalize_name(ocr_line)
     normalized_alias = _normalize_name(alias)
-    if not normalized_line or not normalized_alias:
+    if not _is_matchable_token(normalized_line) or not _is_matchable_token(normalized_alias):
         return 0.0, "empty"
     if normalized_line == normalized_alias:
         return 1.0, "exact_name"
-    if len(normalized_alias) >= 3 and normalized_alias in normalized_line:
+    if len(normalized_alias) >= 4 and normalized_alias in normalized_line:
         return 0.93, "alias_in_ocr_line"
-    if len(normalized_line) >= 3 and normalized_line in normalized_alias:
+    if (
+        len(normalized_line) >= 5
+        and normalized_line in normalized_alias
+        and len(normalized_line) / max(1, len(normalized_alias)) >= 0.55
+    ):
         return 0.88, "ocr_line_in_alias"
+    if _is_short_ascii_token(normalized_line) or _is_short_ascii_token(normalized_alias):
+        return 0.0, "short_ascii_token"
     return SequenceMatcher(None, normalized_line, normalized_alias).ratio(), "fuzzy_name"
 
 
@@ -189,6 +195,20 @@ def _clean_line(value: str) -> str:
 def _normalize_name(value: str) -> str:
     lowered = value.casefold()
     return re.sub(r"[^\w\u4e00-\u9fff]+", "", lowered)
+
+
+def _is_matchable_token(normalized: str) -> bool:
+    if not normalized:
+        return False
+    if re.search(r"[\u4e00-\u9fff]", normalized):
+        return len(normalized) >= 2
+    if _is_short_ascii_token(normalized):
+        return False
+    return len(normalized) >= 4
+
+
+def _is_short_ascii_token(normalized: str) -> bool:
+    return normalized.isascii() and len(normalized) < 4
 
 
 def _looks_like_ui_noise(normalized: str) -> bool:

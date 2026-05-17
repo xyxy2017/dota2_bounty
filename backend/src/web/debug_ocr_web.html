@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>网页截图 OCR</title>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
+    <style>
+      body { font-family: "Segoe UI", "Microsoft YaHei", sans-serif; margin: 0; background: #08111f; color: #e8f2ff; }
+      main { max-width: 1100px; margin: 0 auto; padding: 18px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+      button, input, select { border: 1px solid #29415f; border-radius: 999px; background: #0e1b31; color: #e8f2ff; padding: 8px 12px; }
+      button { cursor: pointer; font-weight: 700; }
+      video, canvas, textarea { width: 100%; border: 1px solid #29415f; border-radius: 12px; background: #020713; }
+      canvas { margin-top: 8px; }
+      textarea { min-height: 150px; margin-top: 8px; padding: 10px; font-family: Consolas, monospace; }
+      .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+      .muted { color: #9ab0ca; }
+      @media (max-width: 900px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1 id="title">网页截图 OCR</h1>
+      <p id="desc" class="muted">用于调试浏览器截图 OCR。后端自动 OCR 请去单独页面。</p>
+      <div class="toolbar">
+        <button id="btnPick">选择 Dota 窗口</button>
+        <button id="btnRun" disabled>识别一次</button>
+        <label class="muted">lang
+          <select id="lang"><option value="eng+chi_sim">eng+chi_sim</option><option value="eng">eng</option></select>
+        </label>
+        <label class="muted">x% <input id="x" type="number" value="10" min="0" max="95" style="width:62px" /></label>
+        <label class="muted">y% <input id="y" type="number" value="8" min="0" max="95" style="width:62px" /></label>
+        <label class="muted">w% <input id="w" type="number" value="33" min="1" max="100" style="width:62px" /></label>
+        <label class="muted">h% <input id="h" type="number" value="2.4" min="1" max="100" step="0.1" style="width:70px" /></label>
+      </div>
+      <div class="grid">
+        <section>
+          <video id="video" autoplay muted playsinline></video>
+          <canvas id="canvas"></canvas>
+        </section>
+        <section>
+          <div id="status" class="muted">等待授权</div>
+          <textarea id="out" placeholder="OCR 输出"></textarea>
+          <div class="toolbar">
+            <a href="/debug/ocr/live" class="muted">返回导航</a>
+            <a href="/debug/ocr/auto-ui" class="muted">去后端自动 OCR</a>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      const $ = (id) => document.getElementById(id);
+      const st = $("status"), video = $("video"), canvas = $("canvas"), out = $("out");
+      const btnPick = $("btnPick"), btnRun = $("btnRun");
+      let stream = null;
+      btnPick.onclick = async () => {
+        stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 2 }, audio: false });
+        video.srcObject = stream;
+        await video.play();
+        btnRun.disabled = false;
+        st.textContent = "已授权，可识别";
+      };
+      btnRun.onclick = async () => {
+        if (!video.videoWidth) return;
+        const x = Number($("x").value), y = Number($("y").value), w = Number($("w").value), h = Number($("h").value);
+        const sx = Math.floor(video.videoWidth * x / 100), sy = Math.floor(video.videoHeight * y / 100);
+        const sw = Math.max(1, Math.floor(video.videoWidth * w / 100)), sh = Math.max(1, Math.floor(video.videoHeight * h / 100));
+        canvas.width = sw * 3; canvas.height = sh * 3;
+        const ctx = canvas.getContext("2d");
+        ctx.drawImage(video, sx, sy, sw, sh, 0, 0, canvas.width, canvas.height);
+        st.textContent = "OCR 中...";
+        const res = await Tesseract.recognize(canvas, $("lang").value || "eng+chi_sim");
+        out.value = res.data.text || "";
+        st.textContent = "完成";
+      };
+    </script>
+  </body>
+</html>

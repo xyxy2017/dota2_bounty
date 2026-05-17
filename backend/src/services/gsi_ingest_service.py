@@ -8,6 +8,7 @@ from services.history_match_service import HistoryMatchService
 from services.job_service import JobService
 from services.roster_collect_service import RosterCollectService
 from services.session_tracker import SessionTracker
+from services.gsi_id_probe_service import GsiIdProbeService
 from storage.repositories.events_repo import EventsRepository
 
 
@@ -22,6 +23,7 @@ class GsiIngestService:
         runtime_status: RuntimeStatusWriter,
         alerts_writer: RuntimeStatusWriter,
         exclude_player_id: str | None = None,
+        id_probe: GsiIdProbeService | None = None,
     ) -> None:
         self.events_repo = events_repo
         self.session_tracker = session_tracker
@@ -31,9 +33,11 @@ class GsiIngestService:
         self.runtime_status = runtime_status
         self.alerts_writer = alerts_writer
         self.exclude_player_id = str(exclude_player_id) if exclude_player_id else None
+        self.id_probe = id_probe
 
     def handle(self, payload: dict[str, Any]) -> dict[str, Any]:
         event_id = self.events_repo.append_event("raw_gsi_event", payload)
+        id_probe_status = self.id_probe.analyze(payload) if self.id_probe else None
         session = self.session_tracker.update(payload)
         roster = self.roster_collector.collect(payload, session)
         hits = self.history_matcher.find_hits(roster)
@@ -74,6 +78,7 @@ class GsiIngestService:
             "hits": [hit.__dict__ for hit in hits],
             "top_hits": [hit.__dict__ for hit in hits[:3]],
             "last_payload_keys": sorted(payload.keys()),
+            "id_probe": id_probe_status,
         }
         self.runtime_status.write(status)
         alerts_payload = self._build_alerts_payload(session.temp_match_key, hits)
@@ -89,6 +94,20 @@ class GsiIngestService:
         if hits:
             self.events_repo.append_event("historical_player_hit", status)
             self.events_repo.append_event("alerts_updated", alerts_payload)
+        if id_probe_status:
+            self.events_repo.append_event(
+                "gsi_id_probe_analyzed",
+                {
+                    "phase": id_probe_status.get("phase"),
+                    "match_id": id_probe_status.get("match_id"),
+                    "unique_player_id_count": id_probe_status.get("unique_player_id_count"),
+                    "non_local_player_id_count": id_probe_status.get("non_local_player_id_count"),
+                    "has_direct_other_player_ids": id_probe_status.get("has_direct_other_player_ids"),
+                    "has_roster_like_payload": id_probe_status.get("has_roster_like_payload"),
+                    "conclusion": id_probe_status.get("conclusion"),
+                    "raw_payload_path": id_probe_status.get("raw_payload_path"),
+                },
+            )
         return status
 
     def _build_alerts_payload(self, temp_match_key: str | None, hits: list[Any]) -> dict[str, Any]:

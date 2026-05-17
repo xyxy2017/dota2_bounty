@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import json
 import threading
@@ -15,6 +15,7 @@ from providers.result.open_dota_provider import OpenDotaResultProvider
 from services.backfill_service import OpenDotaBackfillService
 from services.auto_ocr_service import AutoOcrService
 from services.gsi_ingest_service import GsiIngestService
+from services.gsi_id_probe_service import GsiIdProbeService, ProbeConfig
 from services.hero_catalog_service import HeroCatalogService
 from services.history_match_service import HistoryMatchService
 from services.job_service import JobService
@@ -58,6 +59,15 @@ class Supervisor:
         )
         self.session_tracker = SessionTracker()
         self.roster_collector = RosterCollectService()
+        self.gsi_id_probe = GsiIdProbeService(
+            ProbeConfig(
+                output_dir=settings.gsi_id_probe_dir,
+                default_account_id=settings.default_account_id,
+                enabled=settings.gsi_id_probe_enabled,
+                write_raw_payloads=settings.gsi_id_probe_write_raw_payloads,
+                max_payloads=settings.gsi_id_probe_max_payloads,
+            )
+        )
         self.job_service = JobService(
             self.jobs_repo,
             self.session_tracker,
@@ -89,6 +99,7 @@ class Supervisor:
             runtime_status=self.runtime_status,
             alerts_writer=self.alerts_writer,
             exclude_player_id=settings.default_account_id,
+            id_probe=self.gsi_id_probe,
         )
         self.operator_service = OperatorService(players_repo=self.players_repo)
         self.ocr_match_service = OcrMatchService(players_repo=self.players_repo)
@@ -100,10 +111,22 @@ class Supervisor:
             events_repo=self.events_repo,
             default_account_id=settings.default_account_id,
             tesseract_path=settings.auto_ocr_tesseract_path,
+            tesseract_lang=settings.auto_ocr_tesseract_lang,
+            tesseract_psm=settings.auto_ocr_tesseract_psm,
+            tesseract_oem=settings.auto_ocr_tesseract_oem,
+            image_scale=settings.auto_ocr_image_scale,
+            image_threshold=settings.auto_ocr_image_threshold,
             window_title=settings.auto_ocr_window_title,
+            process_name=settings.auto_ocr_process_name,
+            auto_focus=settings.auto_ocr_auto_focus,
+            use_slots=settings.auto_ocr_use_slots,
+            debug_images=settings.auto_ocr_debug_images,
+            debug_max_runs=settings.auto_ocr_debug_max_runs,
             interval_seconds=settings.auto_ocr_interval_seconds,
             threshold=settings.auto_ocr_threshold,
             min_encounters=settings.auto_ocr_min_encounters,
+            confirm_scans=settings.auto_ocr_confirm_scans,
+            cooldown_seconds=settings.auto_ocr_cooldown_seconds,
             require_tagged=settings.auto_ocr_require_tagged,
             alert_payload_builder=_build_ocr_alerts_payload,
         )
@@ -223,6 +246,16 @@ class Supervisor:
                     "updated_at": status.get("updated_at"),
                 }
 
+            if method == "GET" and path == "/debug/gsi/id-probe":
+                return 200, self.gsi_id_probe.status()
+
+            if method == "GET" and path == "/debug/gsi/id-probe/raw":
+                limit = _to_bounded_int(query.get("limit"), 50, 1, 500)
+                return 200, self.gsi_id_probe.list_raw_payloads(limit=limit)
+
+            if method == "POST" and path == "/debug/gsi/id-probe/reset":
+                return 200, self.gsi_id_probe.reset()
+
             if method == "GET" and path == "/debug/ocr/status":
                 return 200, self._build_ocr_debug_status()
 
@@ -235,11 +268,33 @@ class Supervisor:
             if method == "POST" and path == "/debug/ocr/auto/stop":
                 return 200, self.auto_ocr_service.stop()
 
+            if method == "POST" and path == "/debug/ocr/auto/focus":
+                data = payload or {}
+                return 200, self.auto_ocr_service.set_auto_focus(
+                    enabled=bool(data.get("enabled"))
+                )
+
+            if method == "POST" and path == "/debug/ocr/auto/debug-images":
+                data = payload or {}
+                return 200, self.auto_ocr_service.set_debug_images(
+                    enabled=bool(data.get("enabled"))
+                )
+
+            if method == "POST" and path == "/debug/ocr/auto/slots":
+                data = payload or {}
+                return 200, self.auto_ocr_service.set_use_slots(
+                    enabled=bool(data.get("enabled"))
+                )
+
             if method == "POST" and path == "/debug/ocr/auto/run-once":
                 data = payload or {}
                 return 200, self.auto_ocr_service.run_once(
-                    publish_alerts=bool(data.get("publish_alerts", True))
+                    publish_alerts=bool(data.get("publish_alerts", True)),
+                    capture_only=bool(data.get("capture_only", False)),
                 )
+
+            if method == "POST" and path == "/debug/ocr/auto/probe-full-window":
+                return 200, self.auto_ocr_service.probe_full_window()
 
             if method == "GET" and path == "/alerts/current":
                 return 200, self.alerts_writer.read()

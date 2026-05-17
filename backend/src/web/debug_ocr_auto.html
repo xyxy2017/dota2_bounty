@@ -1,0 +1,280 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>后端自动 OCR</title>
+    <style>
+      body { margin: 0; background: #08111f; color: #e8f2ff; font-family: "Segoe UI", "Microsoft YaHei", sans-serif; }
+      main { max-width: 1280px; margin: 0 auto; padding: 12px; }
+      h1 { margin: 0 0 8px; font-size: 24px; }
+      h3 { margin: 0 0 8px; font-size: 18px; }
+      button, input { border: 1px solid #29415f; border-radius: 999px; background: #0e1b31; color: #e8f2ff; padding: 7px 12px; }
+      button { font-weight: 700; cursor: pointer; }
+      button:disabled { cursor: not-allowed; opacity: 0.55; }
+      img { width: 100%; border: 1px solid #29415f; border-radius: 8px; background: #020713; }
+      pre { margin: 0; border: 1px solid #29415f; border-radius: 8px; background: #081426; padding: 8px; white-space: pre-wrap; overflow: auto; max-height: 22vh; font-size: 13px; }
+      details { margin-top: 8px; }
+      .toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 10px; }
+      .layout { display: grid; grid-template-columns: 1.2fr 1fr; gap: 10px; }
+      .panel { border: 1px solid #29415f; border-radius: 12px; background: #06101d; padding: 10px; min-height: 0; }
+      .pill { border: 1px solid #29415f; border-radius: 999px; padding: 4px 10px; font-size: 13px; }
+      .good { color: #76f7b7; border-color: #76f7b7; }
+      .warn { color: #ffd166; border-color: #ffd166; }
+      .err { color: #ff8e8e; border-color: #ff8e8e; }
+      .muted { color: #9ab0ca; }
+      .progressWrap { display: grid; gap: 6px; margin-bottom: 10px; }
+      .progressMeta { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; color: #9ab0ca; }
+      .bar { height: 12px; overflow: hidden; border: 1px solid #29415f; border-radius: 999px; background: #081426; }
+      .barFill { width: 0%; height: 100%; border-radius: inherit; background: #76f7b7; transition: width 180ms ease; }
+      .kvGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; margin: 8px 0 10px; }
+      .kv { display: grid; grid-template-columns: 96px 1fr; gap: 6px; font-size: 14px; min-width: 0; }
+      .kv span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .imgRow { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+      .slotGrid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; max-height: 42vh; overflow: auto; }
+      .slotCard { border: 1px solid #29415f; border-radius: 8px; padding: 6px; background: #081426; }
+      .slotName { font-size: 12px; color: #9ab0ca; margin-bottom: 4px; }
+      .slotText { font-size: 12px; line-height: 1.3; min-height: 26px; word-break: break-all; }
+      .links { margin-top: 8px; display: flex; gap: 10px; flex-wrap: wrap; }
+      .links a { color: #9ab0ca; }
+      @media (max-width: 980px) {
+        .layout { grid-template-columns: 1fr; }
+        .kvGrid { grid-template-columns: 1fr; }
+        .slotGrid { grid-template-columns: repeat(2, 1fr); max-height: 32vh; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>后端自动 OCR</h1>
+      <div class="toolbar">
+        <button id="start">开始</button>
+        <button id="stop">停止</button>
+        <button id="once">识别一次</button>
+        <label><input id="captureOnly" type="checkbox" /> 仅截图</label>
+        <label><input id="useSlots" type="checkbox" /> slot 模式</label>
+        <label><input id="autoFocus" type="checkbox" /> 自动拉起 Dota2 到前台</label>
+        <button id="refresh">刷新</button>
+        <span id="runState" class="pill warn">未知</span>
+        <span id="cooldown" class="pill">CD: --</span>
+      </div>
+
+      <section class="panel progressWrap">
+        <div class="progressMeta">
+          <span id="progressLabel">等待状态</span>
+          <span id="progressPct">0%</span>
+        </div>
+        <div class="bar"><div id="progressFill" class="barFill"></div></div>
+        <div class="kvGrid">
+          <div class="kv"><span class="muted">截图触发</span><span id="captureTriggeredAt">-</span></div>
+          <div class="kv"><span class="muted">截图完成</span><span id="captureCompletedAt">-</span></div>
+          <div class="kv"><span class="muted">OCR 开始</span><span id="ocrStartedAt">-</span></div>
+          <div class="kv"><span class="muted">OCR 完成</span><span id="ocrCompletedAt">-</span></div>
+          <div class="kv"><span class="muted">OCR 进度</span><span id="ocrCount">-</span></div>
+          <div class="kv"><span class="muted">本轮耗时</span><span id="durationText">-</span></div>
+        </div>
+      </section>
+
+      <div class="layout">
+        <section class="panel">
+          <h3>截图预览</h3>
+          <div class="imgRow">
+            <img id="imgLeft" alt="left5" />
+            <img id="imgRight" alt="right5" />
+          </div>
+          <details id="slotPanel">
+            <summary>slot 截图（10格）</summary>
+            <div id="slotGrid" class="slotGrid"></div>
+          </details>
+        </section>
+
+        <section class="panel">
+          <h3>识别结果</h3>
+          <div class="kvGrid">
+            <div class="kv"><span class="muted">state</span><span id="stateText">-</span></div>
+            <div class="kv"><span class="muted">phase</span><span id="phaseText">-</span></div>
+            <div class="kv"><span class="muted">match</span><span id="matchCount">0</span></div>
+            <div class="kv"><span class="muted">warning</span><span id="warnText">-</span></div>
+          </div>
+          <pre id="rawText"></pre>
+          <details>
+            <summary>详细状态 JSON</summary>
+            <pre id="status">{}</pre>
+          </details>
+          <div class="links">
+            <a href="/debug/ocr/live">返回导航</a>
+            <a href="/debug/ocr/web">去网页截图 OCR</a>
+            <a href="/">主页面提醒</a>
+          </div>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let latestStatus = null;
+      let busy = false;
+
+      function imageUrl(name) {
+        return `/debug/ocr/auto/images/${encodeURIComponent(name)}?t=${Date.now()}`;
+      }
+
+      function fileNameFromPath(p) {
+        if (!p) return "";
+        const normalized = String(p).replaceAll("\\", "/");
+        return normalized.substring(normalized.lastIndexOf("/") + 1);
+      }
+
+      function formatTime(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleTimeString("zh-CN", { hour12: false });
+      }
+
+      function cleanRawText(raw) {
+        return String(raw || "")
+          .replace(/127\.0\.0\.1[:/][^\s]*/g, "")
+          .replace(/debug\/ocr\/auto-ui/gi, "")
+          .replace(/\n{3,}/g, "\n\n")
+          .trim();
+      }
+
+      async function post(path, body = {}) {
+        const res = await fetch(path, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        return res.json();
+      }
+
+      function renderProgress(data) {
+        const pct = Math.max(0, Math.min(100, Number(data.progress_percent ?? 0)));
+        const phase = data.phase || data.state || "unknown";
+        const message = data.progress_message || phase;
+        $("progressFill").style.width = `${pct}%`;
+        $("progressPct").textContent = `${pct}%`;
+        $("progressLabel").textContent = message;
+        $("captureTriggeredAt").textContent = formatTime(data.capture_triggered_at);
+        $("captureCompletedAt").textContent = formatTime(data.capture_completed_at);
+        $("ocrStartedAt").textContent = formatTime(data.ocr_started_at);
+        $("ocrCompletedAt").textContent = formatTime(data.ocr_completed_at);
+        const current = data.ocr_current;
+        const total = data.ocr_total;
+        $("ocrCount").textContent = Number.isFinite(Number(total)) && Number(total) > 0 ? `${current || 0}/${total}` : "-";
+        const duration = data.duration_seconds ?? data.elapsed_seconds;
+        $("durationText").textContent = duration == null ? "-" : `${Number(duration).toFixed(1)}s`;
+      }
+
+      function renderCore(data) {
+        $("stateText").textContent = data.state || "unknown";
+        $("phaseText").textContent = data.phase || "-";
+        $("matchCount").textContent = String(data.match_result?.match_count ?? 0);
+        $("warnText").textContent = data.warning || data.error || "-";
+        $("rawText").textContent = cleanRawText(data.raw_text || "(暂无 OCR 文本)");
+        $("status").textContent = JSON.stringify(data, null, 2);
+        renderProgress(data);
+      }
+
+      function renderImages(data) {
+        $("imgLeft").src = imageUrl("left5.png");
+        $("imgRight").src = imageUrl("right5.png");
+
+        const captures = Array.isArray(data.captures) ? data.captures : [];
+        const slots = captures.filter((c) => c && c.kind === "slot");
+        const grid = $("slotGrid");
+        grid.innerHTML = "";
+        $("slotPanel").open = !!slots.length;
+        for (const slot of slots) {
+          const fileName = fileNameFromPath(slot.path) || `${slot.name}.png`;
+          const card = document.createElement("div");
+          card.className = "slotCard";
+          const label = document.createElement("div");
+          label.className = "slotName";
+          label.textContent = `${slot.team || "-"} #${slot.slot_index ?? "-"} (${slot.name || fileName})`;
+          const img = document.createElement("img");
+          img.src = imageUrl(fileName);
+          img.alt = slot.name || fileName;
+          const txt = document.createElement("div");
+          txt.className = "slotText";
+          txt.textContent = cleanRawText(slot.text || "(无文本)");
+          card.append(label, img, txt);
+          grid.append(card);
+        }
+      }
+
+      function renderRunState(data) {
+        const enabled = !!data.enabled;
+        const state = data.state || "unknown";
+        const updatedAt = data.updated_at ? new Date(data.updated_at).getTime() : null;
+        const intervalSec = Number(data.interval_seconds || 6);
+        const remain = updatedAt ? Math.max(0, intervalSec - (Date.now() - updatedAt) / 1000) : null;
+        const runStateEl = $("runState");
+        if (busy) {
+          runStateEl.textContent = "处理中...";
+          runStateEl.className = "pill warn";
+        } else if (String(state).includes("error") || String(state).includes("failed")) {
+          runStateEl.textContent = `错误 (${state})`;
+          runStateEl.className = "pill err";
+        } else if (state === "dota_not_foreground") {
+          runStateEl.textContent = "已暂停（Dota2 不在前台）";
+          runStateEl.className = "pill warn";
+        } else if (enabled) {
+          runStateEl.textContent = `运行中 (${state})`;
+          runStateEl.className = "pill good";
+        } else {
+          runStateEl.textContent = `已停止 (${state})`;
+          runStateEl.className = "pill warn";
+        }
+        $("cooldown").textContent = remain == null ? "CD: --" : `CD: ${remain.toFixed(1)}s`;
+        $("start").disabled = enabled || busy;
+        $("stop").disabled = !enabled || busy;
+        $("once").disabled = busy;
+      }
+
+      async function refresh() {
+        const res = await fetch("/debug/ocr/auto");
+        const data = await res.json();
+        latestStatus = data;
+        $("useSlots").checked = !!data.use_slots;
+        $("autoFocus").checked = !!data.auto_focus;
+        renderCore(data);
+        renderImages(data);
+        renderRunState(data);
+      }
+
+      $("start").onclick = async () => {
+        busy = true; renderRunState(latestStatus || {});
+        latestStatus = await post("/debug/ocr/auto/start");
+        busy = false; await refresh();
+      };
+      $("stop").onclick = async () => {
+        busy = true; renderRunState(latestStatus || {});
+        latestStatus = await post("/debug/ocr/auto/stop");
+        busy = false; await refresh();
+      };
+      $("once").onclick = async () => {
+        busy = true; renderRunState(latestStatus || {});
+        latestStatus = await post("/debug/ocr/auto/run-once", {
+          publish_alerts: false,
+          capture_only: $("captureOnly").checked,
+        });
+        busy = false;
+        renderCore(latestStatus); renderImages(latestStatus); renderRunState(latestStatus);
+      };
+      $("useSlots").onchange = async () => {
+        latestStatus = await post("/debug/ocr/auto/slots", { enabled: $("useSlots").checked });
+        renderRunState(latestStatus); await refresh();
+      };
+      $("autoFocus").onchange = async () => {
+        latestStatus = await post("/debug/ocr/auto/focus", { enabled: $("autoFocus").checked });
+        renderRunState(latestStatus); await refresh();
+      };
+      $("refresh").onclick = refresh;
+      setInterval(() => { if (!latestStatus) return; renderRunState(latestStatus); renderProgress(latestStatus); }, 1000);
+      setInterval(() => { if (busy) return; refresh().catch(() => {}); }, 1200);
+      refresh();
+    </script>
+  </body>
+</html>

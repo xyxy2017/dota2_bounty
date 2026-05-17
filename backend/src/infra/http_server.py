@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import parse_qsl, urlparse
+from urllib.parse import parse_qsl, unquote, urlparse
 
 from app.supervisor import HttpError, Supervisor
 
@@ -27,6 +27,8 @@ def run_server(supervisor: Supervisor, host: str, port: int) -> None:
         def _handle(self, method: str) -> None:
             parsed = urlparse(self.path)
             if method == "GET":
+                if self._try_auto_ocr_image(parsed.path):
+                    return
                 maybe_static = self._try_static(parsed.path)
                 if maybe_static:
                     return
@@ -68,6 +70,28 @@ def run_server(supervisor: Supervisor, host: str, port: int) -> None:
             self.wfile.write(data)
             return True
 
+        def _try_auto_ocr_image(self, path: str) -> bool:
+            prefix = "/debug/ocr/auto/images/"
+            if not path.startswith(prefix):
+                return False
+            filename = unquote(path.removeprefix(prefix))
+            if "/" in filename or "\\" in filename or not filename.lower().endswith(".png"):
+                self._write_json(404, {"detail": "image not found"})
+                return True
+            target = (supervisor.settings.auto_ocr_dir / filename).resolve()
+            base = supervisor.settings.auto_ocr_dir.resolve()
+            if target.parent != base or not target.exists():
+                self._write_json(404, {"detail": "image not found"})
+                return True
+            data = target.read_bytes()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/png")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return True
+
     httpd = ThreadingHTTPServer((host, port), Handler)
     supervisor.startup()
     try:
@@ -84,8 +108,11 @@ def _build_static_file_map(ui_dir: Path) -> dict[str, Path]:
         "/": ui_dir / "index.html",
         "/index.html": ui_dir / "index.html",
         "/debug/roster/live": ui_dir / "debug_roster_live.html",
+        "/debug/gsi/id-probe-ui": ui_dir / "debug_gsi_id_probe.html",
         "/debug/ocr": ui_dir / "debug_ocr.html",
         "/debug/ocr/live": ui_dir / "debug_ocr_live.html",
+        "/debug/ocr/web": ui_dir / "debug_ocr_web.html",
+        "/debug/ocr/auto-ui": ui_dir / "debug_ocr_auto.html",
         "/app.js": ui_dir / "app.js",
         "/styles.css": ui_dir / "styles.css",
     }

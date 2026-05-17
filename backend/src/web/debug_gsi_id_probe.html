@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GSI 玩家 ID 探针</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #07111f;
+        --panel: #0d1a2c;
+        --panel-2: #10243b;
+        --border: #294a72;
+        --text: #f4f8ff;
+        --muted: #9fb9d8;
+        --accent: #56d89b;
+        --warn: #f5c84c;
+        --bad: #ff7b86;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: var(--bg);
+        color: var(--text);
+        font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      }
+      main {
+        width: min(1480px, calc(100vw - 32px));
+        margin: 0 auto;
+        padding: 24px 0;
+      }
+      h1 {
+        margin: 0 0 12px;
+        font-size: 34px;
+        line-height: 1.15;
+      }
+      h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+      }
+      p {
+        margin: 0;
+        color: var(--muted);
+      }
+      button,
+      a.button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 0 14px;
+        background: var(--panel-2);
+        color: var(--text);
+        text-decoration: none;
+        font: inherit;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      button:hover,
+      a.button:hover {
+        border-color: #4b78ad;
+      }
+      .toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 0 12px;
+        color: var(--muted);
+        font-weight: 700;
+      }
+      .pill.good {
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .pill.warn {
+        border-color: var(--warn);
+        color: var(--warn);
+      }
+      .pill.bad {
+        border-color: var(--bad);
+        color: var(--bad);
+      }
+      .layout {
+        display: grid;
+        grid-template-columns: minmax(0, 1.05fr) minmax(420px, 0.95fr);
+        gap: 14px;
+      }
+      section {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--panel);
+        padding: 16px;
+        min-width: 0;
+      }
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .metric {
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: rgba(16, 36, 59, 0.55);
+      }
+      .metric span {
+        display: block;
+        color: var(--muted);
+        font-size: 13px;
+        margin-bottom: 6px;
+      }
+      .metric strong {
+        display: block;
+        font-size: 22px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 10px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 160px minmax(0, 1fr);
+        gap: 12px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(78, 118, 170, 0.25);
+      }
+      .row:last-child {
+        border-bottom: 0;
+      }
+      .label {
+        color: var(--muted);
+      }
+      .value {
+        overflow-wrap: anywhere;
+      }
+      .list {
+        display: grid;
+        gap: 8px;
+      }
+      .item {
+        border: 1px solid rgba(78, 118, 170, 0.55);
+        border-radius: 8px;
+        padding: 10px;
+        background: rgba(4, 10, 19, 0.35);
+      }
+      .item strong {
+        display: block;
+        margin-bottom: 4px;
+      }
+      code,
+      pre {
+        font-family: "Cascadia Mono", Consolas, monospace;
+      }
+      pre {
+        max-height: 430px;
+        overflow: auto;
+        margin: 0;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 12px;
+        background: #050b14;
+        color: #dcecff;
+        white-space: pre-wrap;
+      }
+      .small {
+        color: var(--muted);
+        font-size: 13px;
+      }
+      @media (max-width: 980px) {
+        main {
+          width: min(100vw - 20px, 760px);
+        }
+        .layout,
+        .grid,
+        .metrics {
+          grid-template-columns: 1fr;
+        }
+        .row {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>GSI 玩家 ID 探针</h1>
+      <p>用于实测 Dota2 原始 GSI payload 是否暴露当前对局其他玩家 ID。它只观察和留档，不影响 OCR 主流程。</p>
+
+      <div class="toolbar">
+        <button id="refresh">刷新</button>
+        <button id="reset">重置探针</button>
+        <a class="button" href="/debug/ocr/auto-ui">后端自动 OCR</a>
+        <a class="button" href="/">主页面</a>
+        <span id="state" class="pill">等待数据</span>
+      </div>
+
+      <div class="layout">
+        <section>
+          <h2>判断结果</h2>
+          <div class="metrics">
+            <div class="metric">
+              <span>收到 GSI 包</span>
+              <strong id="payloadCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>唯一玩家 ID</span>
+              <strong id="uniqueCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>非本地玩家 ID</span>
+              <strong id="nonLocalCount">0</strong>
+            </div>
+            <div class="metric">
+              <span>Roster-like</span>
+              <strong id="rosterCount">0</strong>
+            </div>
+          </div>
+          <div class="row">
+            <div class="label">当前阶段</div>
+            <div id="phase" class="value">-</div>
+          </div>
+          <div class="row">
+            <div class="label">match_id</div>
+            <div id="matchId" class="value">-</div>
+          </div>
+          <div class="row">
+            <div class="label">结论</div>
+            <div id="conclusion" class="value">-</div>
+          </div>
+          <div class="row">
+            <div class="label">本地玩家 ID</div>
+            <div id="localIds" class="value">-</div>
+          </div>
+          <div class="row">
+            <div class="label">非本地玩家 ID</div>
+            <div id="nonLocalIds" class="value">-</div>
+          </div>
+          <div class="row">
+            <div class="label">原始包目录</div>
+            <div id="rawDir" class="value small">-</div>
+          </div>
+        </section>
+
+        <section>
+          <h2>玩家对象候选</h2>
+          <div id="players" class="list"></div>
+        </section>
+
+        <section>
+          <h2>ID 字段候选</h2>
+          <div id="candidates" class="list"></div>
+        </section>
+
+        <section>
+          <h2>完整状态 JSON</h2>
+          <pre id="json">{}</pre>
+        </section>
+      </div>
+    </main>
+
+    <script>
+      const $ = (id) => document.getElementById(id);
+      let latest = {};
+
+      function text(value, fallback = "-") {
+        if (value === null || value === undefined || value === "") return fallback;
+        if (Array.isArray(value)) return value.length ? value.join(" / ") : fallback;
+        return String(value);
+      }
+
+      function renderList(id, items, renderItem) {
+        const root = $(id);
+        root.innerHTML = "";
+        if (!items || !items.length) {
+          const empty = document.createElement("div");
+          empty.className = "small";
+          empty.textContent = "暂无";
+          root.appendChild(empty);
+          return;
+        }
+        for (const item of items.slice(0, 30)) {
+          const node = document.createElement("div");
+          node.className = "item";
+          node.innerHTML = renderItem(item);
+          root.appendChild(node);
+        }
+      }
+
+      function render(data) {
+        latest = data || {};
+        const hasOther = Boolean(latest.has_direct_other_player_ids);
+        const observed = Number(latest.observed_payload_count || 0);
+        $("state").className = hasOther ? "pill good" : observed ? "pill warn" : "pill";
+        $("state").textContent = hasOther ? "发现其他玩家 ID" : observed ? "未发现其他玩家 ID" : "等待 GSI";
+        $("payloadCount").textContent = observed;
+        $("uniqueCount").textContent = latest.unique_player_id_count || 0;
+        $("nonLocalCount").textContent = latest.non_local_player_id_count || 0;
+        $("rosterCount").textContent = latest.roster_player_id_count || 0;
+        $("phase").textContent = text(latest.phase);
+        $("matchId").textContent = text(latest.match_id);
+        $("conclusion").textContent = text(latest.conclusion);
+        $("localIds").textContent = text(latest.local_player_ids);
+        $("nonLocalIds").textContent = text(latest.non_local_player_ids);
+        $("rawDir").textContent = text(latest.raw_payload_dir);
+        renderList("players", latest.player_objects || [], (item) => `
+          <strong>${text(item.normalized_id)} <span class="small">(${text(item.scope)})</span></strong>
+          <div class="small">${text(item.name)} · ${text(item.team)} · hero=${text(item.hero_id || item.hero_name)}</div>
+          <code class="small">${text(item.path)}</code>
+        `);
+        renderList("candidates", latest.candidate_ids || [], (item) => `
+          <strong>${text(item.normalized_id)} <span class="small">(${text(item.key)} / ${text(item.scope)})</span></strong>
+          <code class="small">${text(item.path)}</code>
+        `);
+        $("json").textContent = JSON.stringify(latest, null, 2);
+      }
+
+      async function refresh() {
+        const res = await fetch("/debug/gsi/id-probe", { cache: "no-store" });
+        render(await res.json());
+      }
+
+      async function reset() {
+        const res = await fetch("/debug/gsi/id-probe/reset", { method: "POST" });
+        render(await res.json());
+      }
+
+      $("refresh").addEventListener("click", refresh);
+      $("reset").addEventListener("click", reset);
+      refresh();
+      setInterval(refresh, 1800);
+    </script>
+  </body>
+</html>
